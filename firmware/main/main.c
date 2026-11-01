@@ -83,7 +83,10 @@ volatile bool s_button_pressed;
  * a reset does not retain RTC memory, the marker simply reads as absent and the
  * device behaves as it did before the marker existed. */
 #define LOW_BATTERY_DRAW_PENDING 0x4C424154u /* "LBAT" */
-RTC_NOINIT_ATTR static uint32_t s_low_battery_draw;
+/* volatile: the store before the draw is never read in this boot, and the
+ * variable never escapes, so without it the compiler may drop the store as dead
+ * and the marker would never reach RTC memory. */
+RTC_NOINIT_ATTR static volatile uint32_t s_low_battery_draw;
 
 /* The scheduled D1001 power phase reports liveness to the stall supervisor
  * before that supervisor's implementation appears below. */
@@ -955,6 +958,71 @@ static void d1001_button_task(void *arg)
 }
 #endif
 
+/**
+ * Act on a non-RUN battery gate: warn once, then sleep until the cell can carry
+ * the device again.
+ *
+ * 0% is the DEEPEST discharge, not an "ignore me" sentinel — the old
+ * `battery > 0` guard skipped exactly the most-critical case, letting the device
+ * keep running WiFi + a full refresh on a near-dead cell and brown out mid-write
+ * (corrupting NVS or a staged OTA slot → brick). Boards with dedicated VBUS
+ * sense bypass the gate while externally powered. See battery_gate.c for the
+ * brownout cases.
+ */
+static void enforce_battery_gate(battery_gate_t gate, int battery)
+{
+    if (gate == BATTERY_GATE_RUN) return;
+
+    ESP_LOGW(TAG, "CRITICAL: Battery below %d%% or unable to carry load — shutting down",
+             CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT);
+    if (gate == BATTERY_GATE_WARN_AND_SLEEP) {
+        board_led_indicate(BOARD_LED_STATE_BATTERY_CRITICAL);
+        /* A no-op when the panel already shows this exact screen, so the
+         * re-checks below cost an ADC read, not a refresh. */
+        s_low_battery_draw = LOW_BATTERY_DRAW_PENDING;
+        display_show_status_message(VD_ICON_BATTERY, "Low battery",
+                                    "Connect USB power to continue");
+        s_low_battery_draw = 0;
+    } else {
+        ESP_LOGW(TAG, "Not retrying the low-battery screen until the cell has rested");
+    }
+    display_sleep_unless_usb_powered();
+#if defined(CONFIG_VELLUM_PANEL_D1001)
+    /* LCD mode: sleep_manager_enter() returns after a bounded delay. */
+    if (battery < 0 || battery >= CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT) {
+        /* Brownout with a healthy resting level: one short rest, then carry on
+         * under the stall supervisor, which stays armed (boot grace covers it). */
+        sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
+                            buttons_get_wake_mask());
+        return;
+    }
+    /* Waiting for someone to plug the display in is not a stall. */
+    app_stall_disarm();
+    int retry_battery = battery;
+    while (retry_battery >= 0 &&
+           retry_battery < CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT &&
+           !board_is_usb_powered()) {
+        sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
+                            buttons_get_wake_mask());
+        retry_battery = board_battery_level();
+    }
+    /* The supervisor is disarmed for good, and app_stall_disarm() promises a
+     * restart at the end of every such path: start over with it armed. */
+    esp_restart();
+#else
+    /* Never use permanent deep sleep here. A transient ADC under-read
+     * would otherwise leave an otherwise healthy e-paper device appearing
+     * dead until a manual reset. Timed sleep preserves brownout safety,
+     * allows a fresh ADC sample, and permits button/USB wake for recovery. */
+    sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
+                        buttons_get_wake_mask());
+    /* Only reached when USB showed up during the wait, and it may already be
+     * gone again. Re-evaluate from scratch rather than run Wi-Fi on a cell this
+     * gate just judged unable to carry it. */
+    esp_restart();
+#endif
+}
+
 void app_main(void)
 {
     /* First, so the banner and every later line are retained. A display that
@@ -1153,49 +1221,9 @@ void app_main(void)
                  warning_interrupted ? " while drawing the low-battery screen" : "");
     }
 
-    /* 0% is the DEEPEST discharge, not an "ignore me" sentinel — the old
-     * `battery > 0` guard skipped exactly the most-critical case, letting the
-     * device keep running WiFi + a full refresh on a near-dead cell and brown out
-     * mid-write (corrupting NVS or a staged OTA slot → brick). Treat any stable
-     * sub-critical reading as critical; boards with dedicated VBUS sense may
-     * explicitly bypass this gate while externally powered. See battery_gate.c
-     * for the brownout cases. */
-    if (battery_gate != BATTERY_GATE_RUN) {
-        ESP_LOGW(TAG, "CRITICAL: Battery below %d%% or unable to carry load — shutting down",
-                 CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT);
-        if (battery_gate == BATTERY_GATE_WARN_AND_SLEEP) {
-            board_led_indicate(BOARD_LED_STATE_BATTERY_CRITICAL);
-            /* A no-op when the panel already shows this exact screen, so the
-             * hourly re-checks below cost an ADC read, not a refresh. */
-            s_low_battery_draw = LOW_BATTERY_DRAW_PENDING;
-            display_show_status_message(VD_ICON_BATTERY, "Low battery",
-                                        "Connect USB power to continue");
-            s_low_battery_draw = 0;
-        } else {
-            ESP_LOGW(TAG, "Not retrying the low-battery screen until the cell has rested");
-        }
-        display_sleep_unless_usb_powered();
-#if defined(CONFIG_VELLUM_PANEL_D1001)
-        /* LCD mode returns after a bounded delay and re-checks the battery. */
-        /* Waiting for someone to plug the display in is not a stall. */
-        app_stall_disarm();
-        int retry_battery = board_battery_level();
-        while (retry_battery >= 0 &&
-               retry_battery < CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT &&
-               !board_is_usb_powered()) {
-            sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
-                                buttons_get_wake_mask());
-            retry_battery = board_battery_level();
-        }
-#else
-        /* Never use permanent deep sleep here. A transient ADC under-read
-         * would otherwise leave an otherwise healthy e-paper device appearing
-         * dead until a manual reset. Timed sleep preserves brownout safety,
-         * allows a fresh ADC sample, and permits button/USB wake for recovery. */
-        sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
-                            buttons_get_wake_mask());
-#endif
-    }
+    /* Returns only on RUN, or on D1001 after a brownout rest with a healthy
+     * resting level; every other outcome ends in deep sleep or a restart. */
+    enforce_battery_gate(battery_gate, battery);
 
     /* Prepare SNTP before DHCP so a network-provided NTP server (option 42)
      * is captured alongside the lease. */
