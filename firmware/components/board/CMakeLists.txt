@@ -14,7 +14,7 @@ if("${IDF_TARGET}" STREQUAL "esp32p4")
 endif()
 
 idf_component_register(
-    SRCS "board.c" "led_indicator.c" "sy6974b_power.c"
+    SRCS "board.c" "led_indicator.c" "sy6974b_power.c" "battery_gate.c"
     INCLUDE_DIRS "include"
     REQUIRES ${board_requires}
 )

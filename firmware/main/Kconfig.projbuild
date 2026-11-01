@@ -92,8 +92,26 @@ menu "Vellum Configuration"
     menu "Timing"
         config VELLUM_BATTERY_CRITICAL_PERCENT
             int "Critical battery shutdown threshold (%)"
-            default 5
-            range 1 20
+            default 10
+            range 1 30
+            help
+                Below this level (on battery) the display draws its low-battery
+                screen once and stops polling. The screen is drawn with a full
+                e-paper refresh, the heaviest load the cell carries without
+                Wi-Fi, so the threshold must leave headroom for it. The former
+                default of 5% (about 3.30 V resting on the E-Series curve) sat at
+                the knee of the discharge curve: the refresh pulled the rail into
+                brownout and the warning was left half-drawn on the panel.
+        config VELLUM_BATTERY_CRITICAL_SLEEP_SEC
+            int "Sleep between battery re-checks once critical (seconds)"
+            default 3600
+            range 300 86400
+            help
+                How long a display below the critical threshold sleeps before it
+                samples the battery again. Each check costs a boot and an ADC
+                read but no refresh (the warning is already on the panel), so a
+                longer interval stretches the remaining charge. USB power and the
+                buttons still wake the device at any time.
         config VELLUM_FALLBACK_SLEEP_SEC
             int "Fallback sleep duration (seconds)"
             default 900

@@ -35,6 +35,10 @@ static lv_obj_t *s_ota_warning = NULL;
 
 static void lvgl_tick_cb(void *arg) { (void)arg; lv_tick_inc(5); }
 
+/* Screen the current draw is about to put on the panel. It becomes the cached
+ * "last screen" only once the refresh has returned; see screen_commit(). */
+static char s_pending_screen[sizeof(s_last_screen)] = {0};
+
 /** Check if the screen already shows this content — skip refresh if so. */
 static bool screen_unchanged(const char *screen_id)
 {
@@ -48,9 +52,23 @@ static bool screen_unchanged(const char *screen_id)
         ESP_LOGI(TAG, "Screen unchanged (%s) — skipping refresh", screen_id);
         return true;
     }
-    strlcpy(s_last_screen, screen_id, sizeof(s_last_screen));
-    nvs_manager_set_str("last_scr", screen_id);
+    /* The marker used to be written HERE, before the refresh. A refresh that
+     * browned out half-way (the low-battery screen on a nearly empty cell is the
+     * typical case) then left a half-drawn panel that every later boot believed
+     * complete, so the screen was never repaired. Invalidate first, commit after. */
+    s_last_screen[0] = '\0';
+    if (stored[0] != '\0') nvs_manager_set_str("last_scr", "");
+    strlcpy(s_pending_screen, screen_id, sizeof(s_pending_screen));
     return false;
+}
+
+/** Record the pending screen as shown. Call only after the refresh returned. */
+static void screen_commit(void)
+{
+    if (s_pending_screen[0] == '\0') return;
+    strlcpy(s_last_screen, s_pending_screen, sizeof(s_last_screen));
+    nvs_manager_set_str("last_scr", s_pending_screen);
+    s_pending_screen[0] = '\0';
 }
 
 static void lvgl_refresh(void)
@@ -516,6 +534,7 @@ void display_show_ota_progress(uint8_t percent)
                      content_top + p->font_lg->line_height + row_gap);
 
         lvgl_refresh();
+        screen_commit();
     }
 }
 
@@ -631,6 +650,7 @@ void display_show_status_message(vellum_display_icon_t icon, const char *title,
     }
 
     lvgl_refresh();
+    screen_commit();
 }
 
 void display_show_error(const char *message)

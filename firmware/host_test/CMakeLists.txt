@@ -28,6 +28,7 @@ add_executable(host_tests
     test_remote_configuration_auth.c
   test_key_revocation.c
   test_sy6974b_power.c
+  test_battery_gate.c
   test_transport_policy.c
   test_wifi_failure.c
   test_render_backoff.c
@@ -42,6 +43,7 @@ add_executable(host_tests
   version_compare.c
   revocation.c
   ../components/board/sy6974b_power.c
+  ../components/board/battery_gate.c
   ../components/http_client/transport_policy.c
   ../components/http_client/response_headers.c
   ../components/wifi_manager/wifi_failure.c

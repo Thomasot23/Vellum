@@ -44,6 +44,7 @@
 #include "mdns.h"
 #include "board.h"
 #include "board_led.h"
+#include "battery_gate.h"
 #include "secure_channel.h"
 #include "security_posture.h"
 #include "ota_manager.h"
@@ -73,6 +74,16 @@ static volatile bool s_power_phase_active;
 #else
 volatile bool s_button_pressed;
 #endif
+
+/* Set immediately before the low-battery screen is drawn and cleared once the
+ * refresh returns. Finding it set after a brownout reset means the warning
+ * itself pulled the cell under, so the next boot must not retry at once. Kept
+ * in RTC memory because it has to outlive exactly the reset it diagnoses, and
+ * an NVS write on a collapsing cell is the thing this path exists to avoid. If
+ * a reset does not retain RTC memory, the marker simply reads as absent and the
+ * device behaves as it did before the marker existed. */
+#define LOW_BATTERY_DRAW_PENDING 0x4C424154u /* "LBAT" */
+RTC_NOINIT_ATTR static uint32_t s_low_battery_draw;
 
 /* The scheduled D1001 power phase reports liveness to the stall supervisor
  * before that supervisor's implementation appears below. */
@@ -1031,7 +1042,21 @@ void app_main(void)
      * stay silent: some boards may be power-cycled between polls and report
      * those starts as POWER_ON rather than a timer wake. Audible feedback is
      * reserved for deliberate button actions and important OTA events. */
-    if (wake == WAKE_REASON_POWER_ON) {
+    /* Decide on the battery BEFORE anything is drawn. A brownout reset reports
+     * itself as a power-on, so the boot screen used to be the first thing a
+     * dying cell was asked to refresh, immediately ahead of the low-battery
+     * screen: two full refreshes back to back on the weakest charge, and the
+     * second one, the one that mattered, was the one that browned out. The ADC
+     * read is cached for the rest of this wake, so doing it early costs nothing. */
+    const int battery = board_battery_level();
+    const bool brownout_reset = esp_reset_reason() == ESP_RST_BROWNOUT;
+    const bool warning_interrupted = s_low_battery_draw == LOW_BATTERY_DRAW_PENDING;
+    s_low_battery_draw = 0;
+    const battery_gate_t battery_gate = battery_gate_decide(
+        battery, CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT, board_is_usb_powered(),
+        brownout_reset, warning_interrupted);
+
+    if (wake == WAKE_REASON_POWER_ON && battery_gate == BATTERY_GATE_RUN) {
         display_show_boot(firmware_version);
     }
     /* Somebody is present for a button wake and for a cold boot, and the
@@ -1117,12 +1142,15 @@ void app_main(void)
     stall_supervisor_start();
     app_progress_grace(CONFIG_VELLUM_BOOT_GRACE_S);
 
-    /* 2. Check battery — critical shutdown if below threshold */
-    int battery = board_battery_level();
+    /* 2. Check battery — critical shutdown if below threshold (decided above) */
     if (battery >= 0) {
         ESP_LOGI(TAG, "Battery level: %d%%", battery);
     } else {
         ESP_LOGW(TAG, "Battery level unavailable; continuing without low-battery gate");
+    }
+    if (brownout_reset) {
+        ESP_LOGW(TAG, "Previous run ended in a brownout%s",
+                 warning_interrupted ? " while drawing the low-battery screen" : "");
     }
 
     /* 0% is the DEEPEST discharge, not an "ignore me" sentinel — the old
@@ -1130,14 +1158,22 @@ void app_main(void)
      * device keep running WiFi + a full refresh on a near-dead cell and brown out
      * mid-write (corrupting NVS or a staged OTA slot → brick). Treat any stable
      * sub-critical reading as critical; boards with dedicated VBUS sense may
-     * explicitly bypass this gate while externally powered. */
-    if (battery >= 0 && battery < CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT &&
-        !board_is_usb_powered()) {
-        ESP_LOGW(TAG, "CRITICAL: Battery below %d%% — shutting down",
+     * explicitly bypass this gate while externally powered. See battery_gate.c
+     * for the brownout cases. */
+    if (battery_gate != BATTERY_GATE_RUN) {
+        ESP_LOGW(TAG, "CRITICAL: Battery below %d%% or unable to carry load — shutting down",
                  CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT);
-        board_led_indicate(BOARD_LED_STATE_BATTERY_CRITICAL);
-        display_show_status_message(VD_ICON_BATTERY, "Low battery",
-                                    "Connect USB power to continue");
+        if (battery_gate == BATTERY_GATE_WARN_AND_SLEEP) {
+            board_led_indicate(BOARD_LED_STATE_BATTERY_CRITICAL);
+            /* A no-op when the panel already shows this exact screen, so the
+             * hourly re-checks below cost an ADC read, not a refresh. */
+            s_low_battery_draw = LOW_BATTERY_DRAW_PENDING;
+            display_show_status_message(VD_ICON_BATTERY, "Low battery",
+                                        "Connect USB power to continue");
+            s_low_battery_draw = 0;
+        } else {
+            ESP_LOGW(TAG, "Not retrying the low-battery screen until the cell has rested");
+        }
         display_sleep_unless_usb_powered();
 #if defined(CONFIG_VELLUM_PANEL_D1001)
         /* LCD mode returns after a bounded delay and re-checks the battery. */
@@ -1147,7 +1183,8 @@ void app_main(void)
         while (retry_battery >= 0 &&
                retry_battery < CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT &&
                !board_is_usb_powered()) {
-            sleep_manager_enter(CONFIG_VELLUM_FALLBACK_SLEEP_SEC, buttons_get_wake_mask());
+            sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
+                                buttons_get_wake_mask());
             retry_battery = board_battery_level();
         }
 #else
@@ -1155,7 +1192,8 @@ void app_main(void)
          * would otherwise leave an otherwise healthy e-paper device appearing
          * dead until a manual reset. Timed sleep preserves brownout safety,
          * allows a fresh ADC sample, and permits button/USB wake for recovery. */
-        sleep_manager_enter(CONFIG_VELLUM_FALLBACK_SLEEP_SEC, buttons_get_wake_mask());
+        sleep_manager_enter(CONFIG_VELLUM_BATTERY_CRITICAL_SLEEP_SEC,
+                            buttons_get_wake_mask());
 #endif
     }
 
