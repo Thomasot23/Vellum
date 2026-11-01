@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
 import {
+  MIN_LOW_BATTERY_THRESHOLD_PCT,
   unifiedRefreshProfileSchema,
   upgradeRefreshProfileConfig,
   type DefaultBehavior,
@@ -268,7 +269,8 @@ const POLICY_FIELDS: {
     labelKey: "lowBatteryThreshold",
     type: "slider",
     unit: "%",
-    min: 5,
+    // Values at or under the firmware shutdown would never take effect.
+    min: MIN_LOW_BATTERY_THRESHOLD_PCT,
     max: 50,
   },
   { key: "imminentEventWindowS", labelKey: "imminentEventWindow", type: "interval" },

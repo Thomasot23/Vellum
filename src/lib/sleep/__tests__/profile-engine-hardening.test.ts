@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   computeDisplayPower,
   computeSleep,
+  FIRMWARE_CRITICAL_BATTERY_PCT,
+  MIN_LOW_BATTERY_THRESHOLD_PCT,
   resolveActiveScheduleRule,
   unifiedRefreshProfileSchema,
   upgradeRefreshProfileConfig,
@@ -80,7 +82,20 @@ describe("enterprise profile policy", () => {
     expect(resolveActiveScheduleRule(profile, now, "UTC")?.name).toBe("quarter");
   });
 
+  it("raises a low-battery threshold the firmware would never reach to the floor", () => {
+    const parse = (pct: number) =>
+      unifiedRefreshProfileSchema.parse({
+        ...upgradeRefreshProfileConfig({}),
+        lowBatteryThresholdPct: pct,
+      }).lowBatteryThresholdPct;
+    expect(parse(5)).toBe(MIN_LOW_BATTERY_THRESHOLD_PCT);
+    expect(parse(FIRMWARE_CRITICAL_BATTERY_PCT)).toBe(MIN_LOW_BATTERY_THRESHOLD_PCT);
+    expect(parse(30)).toBe(30);
+    expect(MIN_LOW_BATTERY_THRESHOLD_PCT).toBeGreaterThan(FIRMWARE_CRITICAL_BATTERY_PCT);
+  });
+
   it.each([
+    { lowBatteryThresholdPct: 0 },
     { usbIntervalS: -1 },
     { usbIntervalS: 1.5 },
     { lowBatteryThresholdPct: 101 },

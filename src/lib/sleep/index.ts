@@ -115,6 +115,22 @@ export const scheduleRuleSchema = z.object({
 
 export type ScheduleRule = z.infer<typeof scheduleRuleSchema>;
 
+/**
+ * Mirrors the CONFIG_VELLUM_BATTERY_CRITICAL_PERCENT default in
+ * firmware/main/Kconfig.projbuild. Below it the display draws its low-battery
+ * screen and stops polling, so no server policy reaches it any more.
+ */
+export const FIRMWARE_CRITICAL_BATTERY_PCT = 10;
+
+/**
+ * Lowest low-battery threshold a profile can hold. A threshold at or under the
+ * firmware shutdown would configure a tier that never runs, so such a value is
+ * not offered in the UI and is raised to this floor wherever it arrives from
+ * (API writes, profiles stored before the floor existed). The margin leaves the
+ * slower tier a band of charge in which it actually stretches the battery.
+ */
+export const MIN_LOW_BATTERY_THRESHOLD_PCT = FIRMWARE_CRITICAL_BATTERY_PCT + 5;
+
 export const refreshProfileSchema = z
   .object({
     /**
@@ -126,7 +142,13 @@ export const refreshProfileSchema = z
     usbIntervalS: z.number().int().min(10).max(604_800).default(60),
     batteryIntervalS: z.number().int().min(10).max(604_800).default(900),
     lowBatteryIntervalS: z.number().int().min(10).max(604_800).default(3600),
-    lowBatteryThresholdPct: z.number().int().min(1).max(100).default(20),
+    lowBatteryThresholdPct: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .transform((pct) => Math.max(pct, MIN_LOW_BATTERY_THRESHOLD_PCT))
+      .default(20),
     imminentEventWindowS: z.number().int().min(60).max(86_400).default(1200),
     wakeBeforeEventS: z.number().int().min(0).max(86_400).default(300),
     /** Legacy field. It was never consumed by firmware and must stay inert. */
