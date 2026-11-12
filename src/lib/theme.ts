@@ -216,3 +216,21 @@ export function snapThemeToPalette(theme: Theme, palette: [number, number, numbe
     footerText: nearest(theme.footerText),
   };
 }
+
+/**
+ * The theme a given display should be drawn with.
+ *
+ * Panels with a fixed set of inks get every colour snapped to one of them, so the
+ * renderer only uses what the panel can print. A full-colour display is different:
+ * its registry palette is a list of NAMED colours, not the set it is limited to,
+ * and snapping to it threw away exactly the colours an operator chose. A brand
+ * yellow of #FFD200 came out as #FFFF00 and a dark grey as black, so every theme
+ * on an LCD looked like a cruder version of itself. Full colour therefore keeps
+ * the theme as written.
+ */
+export function themeForDisplay(
+  theme: Theme,
+  display: { palette: [number, number, number][]; colorMode: string }
+): Theme {
+  return display.colorMode === "fullcolor" ? theme : snapThemeToPalette(theme, display.palette);
+}

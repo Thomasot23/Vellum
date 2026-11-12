@@ -16,7 +16,7 @@ import { apiLimiter, getClientIp, applyRateLimit } from "@/lib/rate-limit";
 import { log } from "@/lib/logger";
 import { resolveDisplayCaps, mergeReportedCaps } from "@/lib/display";
 import { getContentRenderer, renderContent } from "@/lib/content";
-import { resolveTheme, parseTheme, snapThemeToPalette, type Theme } from "@/lib/theme";
+import { resolveTheme, parseTheme, themeForDisplay, type Theme } from "@/lib/theme";
 import { renderEntityTag } from "@/lib/render-etag";
 
 const IDLE_SCREEN_REVISION = "no-content-v1";
@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Snap theme colors to display palette — ensures exact color matches, no dithering artifacts
-  theme = snapThemeToPalette(theme, display.palette);
+  theme = themeForDisplay(theme, display);
 
   // Render
   const now = new Date();

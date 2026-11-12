@@ -5,7 +5,7 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db, withDbRead } from "@/db";
 import { contentInstances, devices, sites, themes } from "@/db/schema";
 import { getContentRenderer, renderContent } from "@/lib/content";
-import { resolveTheme, parseTheme, snapThemeToPalette } from "@/lib/theme";
+import { resolveTheme, parseTheme, themeForDisplay } from "@/lib/theme";
 import { previewImage } from "@/lib/render";
 import { resolveDisplayCaps, DISPLAY_REGISTRY, type ResolvedDisplay } from "@/lib/display";
 import { requestHasPermission } from "@/lib/access";
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
   /* Same snap as the render route: a theme colour the panel cannot produce is
    * resolved to one it can, so the renderers get exact palette entries rather than
    * values the quantiser will move underneath them. */
-  theme = snapThemeToPalette(theme, display.palette);
+  theme = themeForDisplay(theme, display);
 
   const result = await renderContent(renderer, {
     config: instance.config,
