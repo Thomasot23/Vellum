@@ -10,7 +10,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/vellum
 
 jobs:
   # Build each arch on its NATIVE runner and push by digest (no tag yet), with an
@@ -37,6 +36,9 @@ jobs:
       contents: read
       packages: write # push-by-digest + attestations; cosign/OIDC lives in the merge job
     steps:
+      # Registry names must be lowercase; an owner such as "SomeUser" is not.
+      - name: Normalize image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY_OWNER,,}/vellum" >> "$GITHUB_ENV"
       - name: Prepare platform label
         run: |
           platform=${{ matrix.platform }}
@@ -112,6 +114,9 @@ jobs:
       packages: write
       id-token: write # cosign keyless OIDC
     steps:
+      # Registry names must be lowercase; an owner such as "SomeUser" is not.
+      - name: Normalize image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY_OWNER,,}/vellum" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v4
         with:
           path: ${{ runner.temp }}/digests
