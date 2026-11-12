@@ -98,10 +98,10 @@ interface DisplayRegistryEntry {
   orientations: ("portrait" | "landscape")[];
 }
 
-/** The models this repo ships firmware for. Lookups by an arbitrary string stay
- * possible (devices report their model as free text) but these four are known to
+/** The models supported by the server. Lookups by an arbitrary string stay
+ * possible (devices report their model as free text) but these models are known to
  * exist, so accessing them needs no undefined check. */
-export type KnownDisplayModel = "e1001" | "e1002" | "e1003" | "d1001";
+export type KnownDisplayModel = "e1001" | "e1002" | "e1003" | "d1001" | "android-panel";
 
 /**
  * SSOT display registry — all known display models.
@@ -156,6 +156,23 @@ export const DISPLAY_REGISTRY: Record<string, DisplayRegistryEntry> &
       return [v, v, v] as [number, number, number];
     }),
     orientations: ["portrait", "landscape"],
+  },
+  "android-panel": {
+    name: "Android Panel",
+    width: 1280,
+    height: 800,
+    format: "jpeg",
+    colorMode: "fullcolor",
+    palette: [
+      [0, 0, 0],
+      [255, 255, 255],
+      [255, 0, 0],
+      [0, 255, 0],
+      [0, 0, 255],
+      [255, 255, 0],
+      [255, 128, 0],
+    ],
+    orientations: ["landscape", "portrait"],
   },
   d1001: {
     name: 'D1001 (8" LCD Color)',

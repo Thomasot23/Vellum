@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (c) 2026 Fabian Schmieder. All rights reserved.
 import { z } from "zod";
-import { displayCapsSchema } from "./display";
+import { completeDisplayCaps, displayCapsSchema } from "./display";
 
 /** UUID v4 regex — use for validating path/query params before DB queries */
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,7 +18,15 @@ export const macSchema = z
 export const helloRequestSchema = z.object({
   mac: macSchema,
   publicKey: z.string().min(1).optional(),
-  display: displayCapsSchema.optional(),
+  display: z
+    .preprocess((raw) => {
+      // Native clients may enroll by registry model; legacy firmware keeps its schema.
+      if (raw && typeof raw === "object" && "model" in raw && raw.model === "android-panel") {
+        return completeDisplayCaps(raw, raw.model) ?? raw;
+      }
+      return raw;
+    }, displayCapsSchema)
+    .optional(),
 });
 
 export const reportRequestSchema = z.object({
