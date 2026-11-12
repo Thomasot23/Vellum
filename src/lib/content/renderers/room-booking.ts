@@ -8,40 +8,11 @@
  */
 
 import { z } from "zod";
-import { type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
+import { loadImage, type Canvas, type Image, type SKRSContext2D } from "@napi-rs/canvas";
 import { format } from "date-fns";
 import { TZDate } from "@date-fns/tz";
-import { de, fr, it, es, enUS } from "date-fns/locale";
 import type { Locale as DateLocale } from "date-fns";
-
-/* `en` is the fallback for both lookups, so the type carries that guarantee. */
-const DATE_LOCALES: Record<string, DateLocale> & { en: DateLocale } = {
-  en: enUS,
-  de,
-  fr,
-  it,
-  es,
-};
-
-interface BadgeText {
-  free: string;
-  busy: string;
-}
-const BADGE_TEXT: Record<string, BadgeText> & { en: BadgeText } = {
-  en: { free: "FREE", busy: "BUSY" },
-  de: { free: "FREI", busy: "BELEGT" },
-  fr: { free: "LIBRE", busy: "OCCUPÉ" },
-  it: { free: "LIBERO", busy: "OCCUPATO" },
-  es: { free: "LIBRE", busy: "OCUPADO" },
-};
-
-const UPDATED_TEXT: Record<string, string> = {
-  en: "updated",
-  de: "aktualisiert",
-  fr: "mis à jour",
-  it: "aggiornato",
-  es: "actualizado",
-};
+import { BADGE_TEXT, DATE_LOCALES, UPDATED_TEXT, bookingLabel } from "./room-booking-text";
 import { applyRoomPolicy } from "@/lib/calendar/policy";
 import { fetchResourceEvents } from "@/lib/calendar/source";
 import { getCalendarProvider } from "@/lib/calendar/registry";
@@ -76,6 +47,8 @@ import {
 } from "./booking-qr";
 import { blockCapacity, planBlockText } from "./room-booking-blocks";
 import { canvasSurface, type SurfaceFactory } from "@/lib/render/surface";
+import { loadBackgroundAsset } from "../retired/shared";
+import { renderDayBand, renderStatusPanel, type StatusFrameSpec } from "./room-status";
 
 /* ── Bitmap font registration for color e-paper ──────────────── */
 
@@ -164,7 +137,7 @@ function textWrap(
 
 /** Room privacy policies — SSOT for schema + UI */
 export { ROOM_POLICIES } from "./room-booking-types";
-import { ROOM_POLICIES } from "./room-booking-types";
+import { ROOM_POLICIES, ROOM_LAYOUTS, STATUS_LAYOUTS } from "./room-booking-types";
 
 const bookingQrConfigSchema = z
   .object({
@@ -189,11 +162,17 @@ export const roomBookingConfigSchema = z.object({
   timezone: z.string().default("UTC"),
   locale: z.string().default("en"),
   dateFormat: z.enum(["PPPP", "PPP", "PP", "P"]).default("PPPP"),
-  layout: z.enum(["timeline", "stacked"]).default("timeline"),
+  layout: z.enum(ROOM_LAYOUTS).default("timeline"),
   policy: z.enum(ROOM_POLICIES).default("Show All"),
   cacheTtlS: z.number().int().min(0).default(120),
   timelineShiftH: z.number().int().min(1).max(8).default(2),
   bookingQr: bookingQrConfigSchema.default({ visibility: "never", source: "provider" }),
+  /* Branding for the status layouts. Data, so that no organisation's name or mark
+   * lives in this code. An empty string from a cleared form field means "none". */
+  brandTitle: z.string().max(120).optional(),
+  brandSubtitle: z.string().max(200).optional(),
+  roomSubtitle: z.string().max(120).optional(),
+  brandMarkAssetId: z.preprocess((v) => (v === "" ? undefined : v), z.uuid().optional()),
 });
 
 export type RoomBookingConfig = z.infer<typeof roomBookingConfigSchema>;
@@ -325,14 +304,6 @@ export interface BookingQrRenderOptions {
   visibility: BookingQrVisibility;
   /** Must be calculated from raw provider events, before privacy filtering. */
   isRoomFree: boolean;
-}
-
-function bookingLabel(locale: string): string {
-  return (
-    { en: "Book room", de: "Jetzt buchen", fr: "Réserver", it: "Prenota", es: "Reservar" }[
-      locale
-    ] ?? "Book room"
-  );
 }
 
 /** Draw a crisp, scanner-safe QR panel. Matrix modules are never interpolated. */
@@ -991,6 +962,27 @@ export interface RoomModel {
   offline: boolean;
   /** Derived from raw events before privacy policy filtering. */
   nextEventStart?: Date | null;
+  /** The decoded brand mark for the status layouts, when one is configured and readable. */
+  brandMark?: Image | null;
+}
+
+/**
+ * The configured brand mark, decoded, or null.
+ *
+ * Never throws: a missing or unreadable asset costs the mark, not the display.
+ */
+async function loadBrandMark(cfg: RoomBookingConfig): Promise<Image | null> {
+  if (!cfg.brandMarkAssetId || !STATUS_LAYOUTS.includes(cfg.layout)) return null;
+  try {
+    const buf = await loadBackgroundAsset(cfg.brandMarkAssetId);
+    return buf ? await loadImage(buf) : null;
+  } catch (err) {
+    log.warn("Room-booking brand mark could not be loaded", {
+      assetId: cfg.brandMarkAssetId,
+      error: String(err),
+    });
+    return null;
+  }
 }
 
 export async function loadRoomModel(params: LoadParams): Promise<RoomModel> {
@@ -1031,9 +1023,12 @@ export async function loadRoomModel(params: LoadParams): Promise<RoomModel> {
     log.warn("Room-booking QR URL resolution failed", { error: String(err) });
   }
 
+  const brandMark = await loadBrandMark(cfg);
+
   return {
     ...base,
     bookingUrl,
+    brandMark,
     events: applyRoomPolicy(events, cfg.policy as RoomPolicy, cfg.locale),
     isRoomFree: !events.some(
       (e) =>
@@ -1096,6 +1091,32 @@ export function drawRoom(model: RoomModel, params: DrawParams): DrawResult {
         isRoomFree: model.isRoomFree,
       }
     : undefined;
+
+  if (cfg.layout === "status-panel" || cfg.layout === "day-band") {
+    const status: StatusFrameSpec = {
+      events: model.events,
+      isRoomFree: model.isRoomFree,
+      roomName: cfg.roomName,
+      roomSubtitle: cfg.roomSubtitle,
+      brandTitle: cfg.brandTitle,
+      brandSubtitle: cfg.brandSubtitle,
+      brandMark: model.brandMark ?? null,
+      timezone: model.timezone,
+      now: model.now,
+      theme: params.theme,
+      width: params.display.width,
+      height: params.display.height,
+      colorMode: params.display.colorMode,
+      locale: cfg.locale,
+      dateFormat: cfg.dateFormat,
+      bookingQr,
+      surface: params.surface,
+    };
+    return {
+      canvas: cfg.layout === "status-panel" ? renderStatusPanel(status) : renderDayBand(status),
+      nextEventStart: model.nextEventStart ?? null,
+    };
+  }
 
   const spec = frameSpecOf(model, params, bookingQr);
   return {

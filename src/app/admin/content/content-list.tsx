@@ -46,7 +46,8 @@ interface Props {
 
 import { ResourcePicker } from "@/components/resource-picker";
 import { NamePlateEditor } from "@/components/name-plate-editor";
-import { ROOM_POLICIES } from "@/lib/content/renderers/room-booking-types";
+import { ROOM_POLICIES, STATUS_LAYOUTS } from "@/lib/content/renderers/room-booking-types";
+import { BrandFields } from "@/components/brand-fields";
 import { recordNumber, recordString } from "@/lib/record-value";
 
 /**
@@ -212,7 +213,13 @@ function RoomBookingEditor({
       >
         <option value="timeline">{t("timeline")}</option>
         <option value="stacked">{t("stacked")}</option>
+        <option value="status-panel">{t("statusPanel")}</option>
+        <option value="day-band">{t("dayBand")}</option>
       </select>
+
+      {(STATUS_LAYOUTS as readonly string[]).includes(recordString(config, "layout")) && (
+        <BrandFields config={config} onChange={onChange} selectCls={selectCls} />
+      )}
 
       <label className="block text-sm font-medium text-label-secondary mb-1">{t("policy")}</label>
       <select
