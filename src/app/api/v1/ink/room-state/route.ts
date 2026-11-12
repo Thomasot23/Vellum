@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const model = await loadRoomModel({
       config: instance.config,
+      calendarDays: 7,
       now,
       timezone: settings.values.timezone ?? undefined,
     });

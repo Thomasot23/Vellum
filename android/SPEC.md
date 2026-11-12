@@ -223,3 +223,12 @@ To intentionally update the contract fixture from the route test:
 ```sh
 UPDATE_ROOM_STATE_FIXTURE=1 pnpm vitest run src/app/api/v1/ink/room-state
 ```
+
+## Implemented native calendar window
+
+The JSON route requests seven calendar days starting at midnight in the resolved
+room timezone. Day boundaries follow daylight saving; provider caching is capped
+at 60 seconds for this route. Existing e-paper rendering keeps its rolling
+16-hour query. The native week view shows these seven days and labels counts as
+visible bookings because privacy policies may hide details. The intermediate UI checkpoint is waived for implementation. Production installation/publication and physical acceptance remain
+separate gates.

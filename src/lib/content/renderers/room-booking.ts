@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import { loadImage, type Canvas, type Image, type SKRSContext2D } from "@napi-rs/canvas";
-import { format } from "date-fns";
+import { addDays, format, startOfDay } from "date-fns";
 import { TZDate } from "@date-fns/tz";
 import type { Locale as DateLocale } from "date-fns";
 import { BADGE_TEXT, DATE_LOCALES, UPDATED_TEXT, bookingLabel } from "./room-booking-text";
@@ -188,14 +188,15 @@ export type RoomBookingConfig = z.infer<typeof roomBookingConfigSchema>;
  * with every other renderer that asks about the same room.
  */
 export async function fetchEvents(
-  config: z.infer<typeof roomBookingConfigSchema>
+  config: z.infer<typeof roomBookingConfigSchema>,
+  window?: { start: Date; end: Date }
 ): Promise<CalendarEvent[]> {
   const now = Date.now();
   return fetchResourceEvents({
     providerId: config.providerId,
     roomConfig: config.roomConfig,
-    windowStart: new Date(now - 4 * 3600_000),
-    windowEnd: new Date(now + 12 * 3600_000),
+    windowStart: window?.start ?? new Date(now - 4 * 3600_000),
+    windowEnd: window?.end ?? new Date(now + 12 * 3600_000),
     ttlS: config.cacheTtlS,
   });
 }
@@ -989,7 +990,7 @@ async function loadBrandImage(
   }
 }
 
-export async function loadRoomModel(params: LoadParams): Promise<RoomModel> {
+export async function loadRoomModel(params: LoadParams & { calendarDays?: 7 }): Promise<RoomModel> {
   const cfg = roomBookingConfigSchema.parse(params.config);
 
   /* The room's own zone wins when it is set; otherwise the display's zone, from
@@ -1013,7 +1014,13 @@ export async function loadRoomModel(params: LoadParams): Promise<RoomModel> {
 
   let events: CalendarEvent[];
   try {
-    events = await fetchEvents(cfg);
+    const start = startOfDay(new TZDate(params.now, timezone));
+    events = params.calendarDays
+      ? await fetchEvents(
+          { ...cfg, cacheTtlS: Math.min(cfg.cacheTtlS, 60) },
+          { start, end: addDays(start, params.calendarDays) }
+        )
+      : await fetchEvents(cfg);
   } catch (err) {
     log.warn("Room-booking fetch failed", { error: String(err) });
     return { ...base, events: [], isRoomFree: false, offline: true };
