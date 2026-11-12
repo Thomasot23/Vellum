@@ -3,8 +3,8 @@
 "use client";
 
 /**
- * Branding for the room-booking status layouts: wordmark lines, a location line
- * and an uploaded mark.
+ * Branding for the room-booking status layouts: a wordmark (an uploaded image or
+ * lines of text), a location line and an uploaded mark.
  *
  * The mark is any SVG or PNG; the renderer draws it as a silhouette in a theme
  * colour, so one file serves every panel and both states. An SVG with explicit
@@ -56,7 +56,7 @@ export function BrandFields({ config, onChange, selectCls }: Props) {
     onChange(next);
   }
 
-  async function upload(file: File) {
+  async function upload(file: File, key: "brandMarkAssetId" | "wordmarkAssetId") {
     setUploading(true);
     setError(null);
     try {
@@ -67,7 +67,7 @@ export function BrandFields({ config, onChange, selectCls }: Props) {
       const body = (await res.json()) as Asset & { error?: string };
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       setAssets((prev) => [...prev, body]);
-      onChange({ ...config, brandMarkAssetId: body.id });
+      onChange({ ...config, [key]: body.id });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -79,6 +79,22 @@ export function BrandFields({ config, onChange, selectCls }: Props) {
     <div className="border-t border-separator pt-3 mt-1 mb-3">
       <label className="block text-sm font-semibold text-label mb-1">{t("branding")}</label>
       <p className="text-xs text-label-tertiary mb-2">{t("brandingHint")}</p>
+
+      <label className="block text-sm font-medium text-label-secondary mb-1">
+        {t("wordmarkImage")}
+      </label>
+      <select
+        className={`${selectCls} mb-2`}
+        value={recordString(config, "wordmarkAssetId")}
+        onChange={(e) => set("wordmarkAssetId", e.target.value)}
+      >
+        <option value="">{t("wordmarkImageNone")}</option>
+        {assets.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
 
       <label className="block text-sm font-medium text-label-secondary mb-1">
         {t("brandTitle")}
@@ -124,20 +140,22 @@ export function BrandFields({ config, onChange, selectCls }: Props) {
           </option>
         ))}
       </select>
-      <label className="block text-xs text-label-secondary">
-        {t("brandMarkUpload")}
-        <input
-          type="file"
-          accept="image/svg+xml,image/png"
-          className="block mt-1 text-xs"
-          disabled={uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void upload(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
+      {(["brandMarkAssetId", "wordmarkAssetId"] as const).map((key) => (
+        <label key={key} className="block text-xs text-label-secondary mb-1">
+          {t(key === "brandMarkAssetId" ? "brandMarkUpload" : "wordmarkUpload")}
+          <input
+            type="file"
+            accept="image/svg+xml,image/png"
+            className="block mt-1 text-xs"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void upload(file, key);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      ))}
       {error && <p className="text-xs text-red mt-1">{error}</p>}
     </div>
   );

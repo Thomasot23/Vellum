@@ -19,6 +19,7 @@ import { resolveTheme, snapThemeToPalette, type Theme } from "@/lib/theme";
 import { DISPLAY_REGISTRY, type ResolvedDisplay } from "@/lib/display";
 import { recordingFactory, type Recording } from "@/lib/render/surface";
 import { checkFrame, type FrameExpectation } from "@/lib/render/frame-invariants";
+import { withIntrinsicSize } from "@/lib/render/svg-size";
 import type { CalendarEvent } from "@/lib/types";
 
 type PanelName = "e1001" | "e1002" | "e1003" | "d1001";
@@ -280,4 +281,40 @@ describe("status text never contains a state label", () => {
         for (const label of [badge.free, badge.busy])
           expect(value.toLowerCase()).not.toContain(label.toLowerCase());
     });
+});
+
+/* A neutral wordmark: three bars, wider than tall, viewBox only like many exports. */
+async function neutralWordmark(): Promise<Image> {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60">' +
+    '<rect x="0" y="0" width="90" height="12"/><rect x="0" y="24" width="70" height="12"/>' +
+    '<rect x="0" y="48" width="80" height="12"/></svg>';
+  return loadImage(withIntrinsicSize(Buffer.from(svg)));
+}
+
+describe("status layouts: wordmark image", () => {
+  for (const layout of LAYOUTS)
+    for (const p of ALL_PANELS)
+      it(`${layout} / ${p} draws the wordmark image instead of text lines`, async () => {
+        const now = at("08:45");
+        const events = SHAPES[1]!.events;
+        const m = model(
+          layout,
+          events,
+          now,
+          { wordmark: await neutralWordmark(), brandMark: await neutralMark() },
+          { brandTitle: "Example\nUniversity" }
+        );
+        const rec = frame(m, panel(p), BRAND_THEME);
+        expectSound(
+          rec,
+          { mustRead: [ROOM, ...owed(layout, events, now)], exactlyOneOf: STATE_LABELS },
+          `${layout} wordmark on ${p}`
+        );
+        expect(rec.images, "mark and wordmark").toBeGreaterThanOrEqual(2);
+        expect(
+          rec.texts.some((t) => t.text === "EXAMPLE"),
+          "text lines yield to the image"
+        ).toBe(false);
+      });
 });

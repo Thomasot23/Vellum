@@ -49,6 +49,7 @@ import { blockCapacity, planBlockText } from "./room-booking-blocks";
 import { canvasSurface, type SurfaceFactory } from "@/lib/render/surface";
 import { loadBackgroundAsset } from "../retired/shared";
 import { renderDayBand, renderStatusPanel, type StatusFrameSpec } from "./room-status";
+import { withIntrinsicSize } from "@/lib/render/svg-size";
 
 /* ── Bitmap font registration for color e-paper ──────────────── */
 
@@ -137,7 +138,7 @@ function textWrap(
 
 /** Room privacy policies — SSOT for schema + UI */
 export { ROOM_POLICIES } from "./room-booking-types";
-import { ROOM_POLICIES, ROOM_LAYOUTS, STATUS_LAYOUTS } from "./room-booking-types";
+import { ROOM_POLICIES, ROOM_LAYOUTS, STATUS_LAYOUTS, type RoomLayout } from "./room-booking-types";
 
 const bookingQrConfigSchema = z
   .object({
@@ -173,6 +174,7 @@ export const roomBookingConfigSchema = z.object({
   brandSubtitle: z.string().max(200).optional(),
   roomSubtitle: z.string().max(120).optional(),
   brandMarkAssetId: z.preprocess((v) => (v === "" ? undefined : v), z.uuid().optional()),
+  wordmarkAssetId: z.preprocess((v) => (v === "" ? undefined : v), z.uuid().optional()),
 });
 
 export type RoomBookingConfig = z.infer<typeof roomBookingConfigSchema>;
@@ -964,23 +966,25 @@ export interface RoomModel {
   nextEventStart?: Date | null;
   /** The decoded brand mark for the status layouts, when one is configured and readable. */
   brandMark?: Image | null;
+  /** The decoded wordmark image, when one is configured and readable. */
+  wordmark?: Image | null;
 }
 
 /**
- * The configured brand mark, decoded, or null.
+ * An uploaded brand image for the status layouts, decoded, or null.
  *
- * Never throws: a missing or unreadable asset costs the mark, not the display.
+ * Never throws: a missing or unreadable asset costs the image, not the display.
  */
-async function loadBrandMark(cfg: RoomBookingConfig): Promise<Image | null> {
-  if (!cfg.brandMarkAssetId || !STATUS_LAYOUTS.includes(cfg.layout)) return null;
+async function loadBrandImage(
+  assetId: string | undefined,
+  layout: RoomLayout
+): Promise<Image | null> {
+  if (!assetId || !STATUS_LAYOUTS.includes(layout)) return null;
   try {
-    const buf = await loadBackgroundAsset(cfg.brandMarkAssetId);
-    return buf ? await loadImage(buf) : null;
+    const buf = await loadBackgroundAsset(assetId);
+    return buf ? await loadImage(withIntrinsicSize(buf)) : null;
   } catch (err) {
-    log.warn("Room-booking brand mark could not be loaded", {
-      assetId: cfg.brandMarkAssetId,
-      error: String(err),
-    });
+    log.warn("Room-booking brand image could not be loaded", { assetId, error: String(err) });
     return null;
   }
 }
@@ -1023,12 +1027,16 @@ export async function loadRoomModel(params: LoadParams): Promise<RoomModel> {
     log.warn("Room-booking QR URL resolution failed", { error: String(err) });
   }
 
-  const brandMark = await loadBrandMark(cfg);
+  const [brandMark, wordmark] = await Promise.all([
+    loadBrandImage(cfg.brandMarkAssetId, cfg.layout),
+    loadBrandImage(cfg.wordmarkAssetId, cfg.layout),
+  ]);
 
   return {
     ...base,
     bookingUrl,
     brandMark,
+    wordmark,
     events: applyRoomPolicy(events, cfg.policy as RoomPolicy, cfg.locale),
     isRoomFree: !events.some(
       (e) =>
@@ -1101,6 +1109,7 @@ export function drawRoom(model: RoomModel, params: DrawParams): DrawResult {
       brandTitle: cfg.brandTitle,
       brandSubtitle: cfg.brandSubtitle,
       brandMark: model.brandMark ?? null,
+      wordmark: model.wordmark ?? null,
       timezone: model.timezone,
       now: model.now,
       theme: params.theme,

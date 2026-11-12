@@ -12,7 +12,8 @@
  * booking QR code is the way in, and it follows the instance's QR setting.
  *
  * Branding is DATA, never code. An operator may set a title and subtitle (the
- * wordmark, set in the render face) and point `brandMarkAssetId` at an uploaded
+ * wordmark, set in the render face) or upload the wordmark as an image
+ * (`wordmarkAssetId`), and point `brandMarkAssetId` at an uploaded
  * SVG or PNG. The mark is drawn as a silhouette, tinted with a theme colour, so
  * one upload serves every panel and every state, and a greyscale panel gets a
  * grey the palette can print rather than a dithered photograph of a colour.
@@ -62,6 +63,8 @@ export interface StatusFrameSpec {
   brandTitle?: string | undefined;
   brandSubtitle?: string | undefined;
   brandMark?: Image | null | undefined;
+  /** A wordmark image. When present it replaces the title and subtitle lines. */
+  wordmark?: Image | null | undefined;
   timezone: string;
   now: Date;
   theme: Theme;
@@ -167,8 +170,8 @@ function tinted(mark: Image, color: string, w: number, h: number): Canvas {
   return c;
 }
 
-function markAspect(mark: Image): number {
-  return mark.height > 0 ? mark.width / mark.height : 0.5;
+function markAspect(mark: Image, fallback = 0.5): number {
+  return mark.height > 0 && mark.width > 0 ? mark.width / mark.height : fallback;
 }
 
 function markColor(preferred: string, ground: string, fallback: string): string {
@@ -176,7 +179,25 @@ function markColor(preferred: string, ground: string, fallback: string): string 
 }
 
 /** Wordmark: title lines in bold, subtitle lines regular. Returns the bottom edge. */
-function drawBrand(p: Pen, spec: StatusFrameSpec, x: number, top: number, color: string): number {
+function drawBrand(
+  p: Pen,
+  spec: StatusFrameSpec,
+  x: number,
+  top: number,
+  color: string,
+  maxW: number
+): number {
+  if (spec.wordmark) {
+    const aspect = markAspect(spec.wordmark, 1.5);
+    let h = 46 * p.u;
+    let w = h * aspect;
+    if (w > maxW) {
+      w = maxW;
+      h = w / aspect;
+    }
+    p.ctx.drawImage(tinted(spec.wordmark, color, w, h), x, top + 4 * p.u);
+    return top + 4 * p.u + h + 2 * p.u;
+  }
   const titles = (spec.brandTitle ?? "").split("\n").filter((l) => l.trim());
   const subs = (spec.brandSubtitle ?? "").split("\n").filter((l) => l.trim());
   if (titles.length === 0 && subs.length === 0) return top;
@@ -322,7 +343,7 @@ export function renderStatusPanel(spec: StatusFrameSpec): Canvas {
 
   const px = panel.x + m;
   const pw = panel.w - 2 * m;
-  let y = drawBrand(p, spec, px, panel.y + m - 4 * u, ink);
+  let y = drawBrand(p, spec, px, panel.y + m - 4 * u, ink, pw * 0.8);
   y = Math.max(y + 22 * u, panel.y + panel.h * (portrait ? 0.16 : 0.22));
 
   const word = stateWord(locale, busy);
@@ -508,7 +529,7 @@ export function renderDayBand(spec: StatusFrameSpec): Canvas {
   }
   const cw = contentR - m;
 
-  const brandBottom = drawBrand(p, spec, m, m - 4 * u, T.footerText);
+  const brandBottom = drawBrand(p, spec, m, m - 4 * u, T.footerText, cw * 0.45);
   const stampW = drawStamp(p, spec, contentR, m - 2 * u);
 
   let y = Math.max(brandBottom + 30 * u, m + 70 * u);
