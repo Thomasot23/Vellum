@@ -1,0 +1,50 @@
+name: Android Panel
+on:
+  pull_request:
+    paths:
+      [
+        "android/**",
+        "src/lib/crypto.ts",
+        "src/lib/content/renderers/room-booking-text.ts",
+        ".github/workflows/android.yml",
+      ]
+  push:
+    branches: [main, feat/room-status-layouts]
+    paths:
+      [
+        "android/**",
+        "src/lib/crypto.ts",
+        "src/lib/content/renderers/room-booking-text.ts",
+        ".github/workflows/android.yml",
+      ]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run src/lib/__tests__/android-token-fixture.test.ts src/lib/__tests__/android-words.test.ts
+      - run: ./gradlew assembleDebug testDebugUnitTest lintDebug ktlintCheck
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-verification
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
