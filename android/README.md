@@ -24,8 +24,8 @@ The debug APK is under `app/build/outputs/apk/debug/app-debug.apk`.
 
 The Android CI workflow builds and runs JVM/Compose tests, lint and ktlint, and
 checks the token fixture and language resources against the server implementation.
-Android Keystore is additionally exercised by `DeviceKeystoreTest` on a test
-emulator/device. The JVM tests use real local HTTP via MockWebServer.
+Android Keystore and both Activity entry points are additionally exercised by
+`DeviceKeystoreTest` on a test emulator/device, including an API-35 CI emulator. The JVM tests use real local HTTP via MockWebServer.
 
 ## Enroll
 

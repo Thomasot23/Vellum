@@ -14,6 +14,28 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class DeviceKeystoreTest {
+    @Test fun debugPreviewStartsOnAndroid() {
+        androidx.test.core.app.ActivityScenario.launch(DemoActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                org.junit.Assert.assertTrue(
+                    activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON !=
+                        0,
+                )
+            }
+        }
+    }
+
+    @Test fun mainActivityStartsOnAndroid() {
+        androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                org.junit.Assert.assertTrue(
+                    activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON !=
+                        0,
+                )
+            }
+        }
+    }
+
     @Test fun encryptedIdentitySurvivesStoreRecreationOnAndroid() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = androidIdentityStore(context)

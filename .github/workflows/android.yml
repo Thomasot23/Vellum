@@ -22,7 +22,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -44,6 +44,15 @@ jobs:
       - run: pnpm vitest run src/lib/__tests__/android-token-fixture.test.ts src/lib/__tests__/android-words.test.ts
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug ktlintCheck
         working-directory: android
+      - name: Enable emulator acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew -p android connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
