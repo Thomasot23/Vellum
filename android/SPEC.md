@@ -56,7 +56,9 @@ Server additions (in this fork, generic, no organisation data):
 
 - **`/api/v1/ink/room-state`**: reuses `loadRoomModel` and the device's resolved
   theme; returns JSON instead of pixels. Same token check as `/render`
-  (normalized MAC query plus `x-device-token`). Includes an ETag so unchanged polls cost nothing.
+  (normalized MAC query plus `x-device-token`). Includes an ETag to avoid resending unchanged content. Authenticated polls
+  refresh device presence and the expected 60-second cadence, including 304/204;
+  presence-write failure does not block room delivery.
 - **`/api/v1/ink/asset/{id}`**: serves only assets referenced by the device's own
   content instance, authenticated by device token.
 - **Display registry entry** `android-panel`: 1280 × 800, `fullcolor`, landscape and

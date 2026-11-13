@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { NextRequest } from "next/server";
+import { eq } from "drizzle-orm";
+import { db, withDbWrite } from "@/db";
+import { devices } from "@/db/schema";
+import { log } from "@/lib/logger";
 import { readDeviceRoom } from "@/lib/device-room";
 import { resolveDeviceTheme } from "@/lib/device-theme";
 import { completeDisplayCaps, mergeReportedCaps, resolveDisplayCaps } from "@/lib/display";
@@ -11,6 +15,21 @@ export async function GET(request: NextRequest) {
   const context = await readDeviceRoom(request);
   if (!context.ok) return context.response;
   const { device, settings, instance } = context;
+  // Native panels poll every minute, including unchanged and unassigned states.
+  await withDbWrite(
+    () =>
+      db
+        .update(devices)
+        .set({
+          lastSeen: new Date(),
+          expectedIntervalS: 60,
+          expectedDisplayState: "on",
+          expectedDeviceState: "awake",
+          expectedWakeAt: null,
+        })
+        .where(eq(devices.mac, device.mac)),
+    "room-state-presence"
+  ).catch(() => log.warn("Native panel presence update failed"));
   const headers = { "Cache-Control": "private, no-cache" };
   if (!instance) return new Response(null, { status: 204, headers });
   if (instance.typeSlug !== "room-booking") {

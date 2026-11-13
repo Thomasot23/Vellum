@@ -1,7 +1,9 @@
 # Panel acceptance checklist
 
-Status: software verification complete locally; physical-panel acceptance pending.
-No production installation or live-server rollout has been performed.
+Status: all four software phases verified locally and in the test emulator.
+An explicitly approved backend rollout and live emulator enrollment were completed.
+No physical panel was available; physical acceptance and a 24-hour hardware run
+remain unverified. No APK has been publicly released.
 
 ## Verified locally
 
@@ -16,6 +18,18 @@ No production installation or live-server rollout has been performed.
 - [x] Contrast, day boundaries, overlapping events and daylight-saving window.
 - [x] Unmanaged kiosk guard, keep-screen-on and brightness/pixel-shift decisions.
 - [x] Debug/release APK builds, JVM tests, lint and ktlint.
+
+## Verified in the approved test environment
+
+- [x] Backend image deployed after database/configuration backup; health checks passed.
+- [x] Dedicated emulator client enrolled, approved and assigned existing room content.
+- [x] Live TLS enrollment, encrypted token, first room response, conditional 304 and cache write.
+- [x] Device Owner provisioning on the local test AVD; Lock Task blocks Home exit.
+- [x] Reboot returns to the app in Lock Task mode.
+- [x] Emulator DNS failure reproduced; a reachable DNS resolver restored HTTPS polling.
+
+No live room screenshots or UI-tree exports were retained. Visual review used
+synthetic fixtures. The test emulator remains provisioned as Device Owner.
 
 ## Physical panel and integrated service
 

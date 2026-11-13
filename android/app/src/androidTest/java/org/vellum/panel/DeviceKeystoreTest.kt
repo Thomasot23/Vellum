@@ -2,6 +2,7 @@
 package org.vellum.panel
 
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -37,7 +38,11 @@ class DeviceKeystoreTest {
     }
 
     @Test fun encryptedIdentitySurvivesStoreRecreationOnAndroid() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val base = ApplicationProvider.getApplicationContext<Context>()
+        val context =
+            object : ContextWrapper(base) {
+                override fun getNoBackupFilesDir() = File(base.noBackupFilesDir, "keystore-test").apply { mkdirs() }
+            }
         val store = androidIdentityStore(context)
         val identity = DeviceIdentity.create("https://example.invalid").copy(token = "public-instrumentation-test")
         try {

@@ -49,7 +49,7 @@ CI environment values; no runtime credentials or live services were used.
 ### Checkpoint 2 (continued by user instruction on 2026-11-13)
 
 - [x] Automated local HTTP enrollment, server-token interoperability and parsed room state verified without logging secrets.
-- [ ] Live enrollment against the deployed Vellum service remains pending service rollout approval.
+- [x] Live enrollment, approval, assignment, room retrieval and conditional revalidation verified on the explicitly approved test emulator and backend.
 
 ## Phase 3: Layouts
 
@@ -71,7 +71,9 @@ CI environment values; no runtime credentials or live services were used.
 
 All software tasks T1–T13 are implemented. Debug/release builds, JVM/Compose
 checks, Android Keystore instrumentation and emulator layout review are complete.
-Physical hardware, integrated service rollout and the 24-hour device run are
-required to close final acceptance; see `../DEVICE_CHECKLIST.md`.
+The approved backend rollout, live emulator enrollment, managed kiosk and reboot
+checks are complete. The user requested local/emulator checks because no physical
+panel is available. Physical acceptance and a 24-hour hardware run remain
+unverified; see `../DEVICE_CHECKLIST.md`.
 
 - [ ] Spec success criteria 1–6 checked on a real panel

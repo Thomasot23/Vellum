@@ -1,17 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { roomBookingConfigSchema, type RoomModel } from "@/lib/content/renderers/room-booking";
 import { roomStateSchema } from "@/lib/room-state";
 import { resolveTheme } from "@/lib/theme";
 
-const state = vi.hoisted(() => ({ rows: [] as unknown[][] }));
+const state = vi.hoisted(() => ({
+  rows: [] as unknown[][],
+  presence: {} as Record<string, unknown>,
+  failPresence: false,
+  presenceFilter: undefined as SQL | undefined,
+}));
 vi.mock("@/db", () => ({
   db: {
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: (filter: SQL) => {
+          state.presenceFilter = filter;
+          if (state.failPresence) throw new Error("test write failure");
+          state.presence = values;
+        },
+      }),
+    }),
     select: vi.fn(() => ({
       from: () => ({ where: () => ({ limit: () => state.rows.shift() ?? [] }) }),
     })),
   },
+  withDbWrite: async (fn: () => unknown) => fn(),
   withDbRead: async (fn: () => unknown) => fn(),
 }));
 vi.mock("@/lib/auth", () => ({ validateToken: vi.fn() }));
@@ -71,10 +88,39 @@ function request(etag?: string, mac = "AA:BB:CC:DD:EE:FF") {
 beforeEach(() => {
   vi.clearAllMocks();
   state.rows = [[device], [instance], []];
+  state.presence = {};
+  state.failPresence = false;
+  state.presenceFilter = undefined;
   vi.mocked(validateToken).mockResolvedValue(true);
   vi.mocked(loadRoomModel).mockResolvedValue(model);
 });
 describe("GET room-state", () => {
+  it("records authenticated presence and cadence for full and cached polls", async () => {
+    const first = await GET(request());
+    expect(new PgDialect().sqlToQuery(state.presenceFilter!).params).toEqual([device.mac]);
+    expect(state.presence).toMatchObject({
+      lastSeen: expect.any(Date),
+      expectedIntervalS: 60,
+      expectedDisplayState: "on",
+      expectedDeviceState: "awake",
+      expectedWakeAt: null,
+    });
+    state.presence = {};
+    state.rows = [[device], [instance], []];
+    expect((await GET(request(first.headers.get("etag")!))).status).toBe(304);
+    expect(state.presence.lastSeen).toBeInstanceOf(Date);
+  });
+  it("still serves room state when the presence write fails", async () => {
+    state.failPresence = true;
+    expect((await GET(request())).status).toBe(200);
+    state.rows = [[{ ...device, contentInstanceId: null }]];
+    expect((await GET(request())).status).toBe(204);
+  });
+  it("does not record presence for an unauthenticated poll", async () => {
+    vi.mocked(validateToken).mockResolvedValue(false);
+    await GET(request());
+    expect(state.presence).toEqual({});
+  });
   it("rejects missing or malformed device identities", async () => {
     expect((await GET(request(undefined, ""))).status).toBe(400);
     expect((await GET(request(undefined, "bad"))).status).toBe(400);
@@ -121,6 +167,8 @@ describe("GET room-state", () => {
   it("returns 204 when no content is assigned", async () => {
     state.rows = [[{ ...device, contentInstanceId: null }]];
     expect((await GET(request())).status).toBe(204);
+    expect(state.presence.lastSeen).toBeInstanceOf(Date);
+    expect(state.presence.expectedIntervalS).toBe(60);
   });
   it("refuses content types that are not rooms", async () => {
     state.rows = [[device], [{ ...instance, typeSlug: "image" }]];
