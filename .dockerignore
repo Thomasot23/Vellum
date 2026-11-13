@@ -9,3 +9,6 @@ LICENSE
 vellum-firmware-signing.key
 *.key
 *.pem
+
+# Native client has its own build and never belongs in the server context.
+android/
