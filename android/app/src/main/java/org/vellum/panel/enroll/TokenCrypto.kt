@@ -22,9 +22,14 @@ data class TokenEnvelope(
 
 /** Wire-compatible with the server's encryptForDevice; no alternate plaintext-token path. */
 object TokenCrypto {
+    /** HKDF contexts, one per kind of secret, matching the server's `crypto.ts`. */
+    const val DEVICE_TOKEN_INFO = "vellum-token-v1"
+    const val STATUS_LIGHT_INFO = "vellum-status-light-v1"
+
     fun decrypt(
         privateKey: ByteArray,
         envelope: TokenEnvelope,
+        info: String = DEVICE_TOKEN_INFO,
     ): String {
         val decoder = Base64.getDecoder()
         val peer = decoder.decode(envelope.serverPublicKey)
@@ -41,7 +46,7 @@ object TokenCrypto {
                 0,
             ).generateSecret(X25519PublicKeyParameters(peer, 0), shared, 0)
             val hkdf = HKDFBytesGenerator(SHA256Digest())
-            hkdf.init(HKDFParameters(shared, null, "vellum-token-v1".toByteArray(Charsets.UTF_8)))
+            hkdf.init(HKDFParameters(shared, null, info.toByteArray(Charsets.UTF_8)))
             hkdf.generateBytes(aes, 0, aes.size)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(
@@ -68,6 +73,9 @@ data class DeviceIdentity(
     val privateKey: String,
     val publicKey: String,
     val token: String? = null,
+    /** Vendor secret for the panel's status light, as delivered by the server. */
+    val lightToken: String? = null,
+    val lightRevision: String? = null,
 ) {
     override fun toString(): String = "DeviceIdentity(mac=$mac)"
 

@@ -14,6 +14,7 @@ import {
   setDeviceLogVerbose,
   setDeviceSite,
   setDeviceBacklight,
+  setDeviceStatusLightToken,
 } from "../../actions";
 import { useToast } from "@/components/toast";
 import { Card as UiCard } from "@/components/ui/card";
@@ -124,6 +125,7 @@ interface Props {
   }[];
   otaEvents: OtaEvent[];
   canProvision: boolean;
+  statusLight: "none" | "stored" | "unreadable";
 }
 
 /**
@@ -168,7 +170,9 @@ export function DeviceDetail({
   logBatches,
   otaEvents,
   canProvision,
+  statusLight,
 }: Props) {
+  const statusLightConfigured = statusLight !== "none";
   const t = useTranslations("devices");
   const locale = useLocale();
   const nameFor = (list: { id: string; name: string }[], id: string | null) =>
@@ -179,6 +183,7 @@ export function DeviceDetail({
   const [serverUrl, setServerUrl] = useState("");
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
+  const [statusLightToken, setStatusLightToken] = useState("");
   const reportedModel = (device.displayCaps as { model?: unknown } | null)?.model;
   const testsecureModel =
     typeof reportedModel === "string" && reportedModel.length > 0
@@ -257,6 +262,20 @@ export function DeviceDetail({
     startTransition(async () => {
       try {
         await setDeviceBacklight(device.mac, value);
+        toast("success", t("toast.updated"));
+        router.refresh();
+      } catch {
+        toast("error", t("toast.updateFailed"));
+      }
+    });
+  }
+
+  /** null removes the secret. The field is cleared either way: it is write-only. */
+  function applyStatusLightToken(value: string | null) {
+    startTransition(async () => {
+      try {
+        await setDeviceStatusLightToken(device.mac, value);
+        setStatusLightToken("");
         toast("success", t("toast.updated"));
         router.refresh();
       } catch {
@@ -926,6 +945,61 @@ export function DeviceDetail({
               {device.backlightPercent === null
                 ? t("backlight.fromProfile")
                 : t("backlight.overridden")}
+            </p>
+          </div>
+        )}
+
+        {/* Only for panels that draw themselves: e-paper displays have no status
+            light. Write-only, so the page knows "set" or "not set" and no more. */}
+        {reportedModel === "android-panel" && (
+          <div className="mt-4 border-t border-separator pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                {t("statusLight.label")}
+                <input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={!canProvision || pending}
+                  value={statusLightToken}
+                  onChange={(e) => setStatusLightToken(e.target.value)}
+                  placeholder={
+                    statusLightConfigured ? t("statusLight.replace") : t("statusLight.enter")
+                  }
+                  className="focus-ring w-64 rounded border border-separator bg-transparent px-2 py-1.5 font-mono text-sm text-label"
+                />
+              </label>
+              {canProvision && (
+                <>
+                  <button
+                    type="button"
+                    disabled={pending || statusLightToken.trim() === ""}
+                    onClick={() => applyStatusLightToken(statusLightToken)}
+                    className="focus-ring rounded border border-separator px-3 py-1.5 text-xs font-medium text-label disabled:opacity-40"
+                  >
+                    {t("statusLight.save")}
+                  </button>
+                  {statusLightConfigured && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => applyStatusLightToken(null)}
+                      className="focus-ring rounded border border-separator px-3 py-1.5 text-xs font-medium text-label disabled:opacity-40"
+                    >
+                      {t("statusLight.remove")}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-label-secondary">
+              {t(
+                statusLight === "stored"
+                  ? "statusLight.configured"
+                  : statusLight === "unreadable"
+                    ? "statusLight.unreadable"
+                    : "statusLight.notConfigured"
+              )}
             </p>
           </div>
         )}

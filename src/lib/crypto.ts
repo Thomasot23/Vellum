@@ -16,7 +16,9 @@
 
 import crypto from "crypto";
 
-const HKDF_INFO = Buffer.from("vellum-token-v1");
+/** HKDF contexts. One per kind of secret, so one envelope can never pass for another. */
+export const DEVICE_TOKEN_INFO = "vellum-token-v1";
+export const STATUS_LIGHT_INFO = "vellum-status-light-v1";
 const KEY_LENGTH = 32; // AES-256
 
 /**
@@ -25,7 +27,8 @@ const KEY_LENGTH = 32; // AES-256
  */
 export function encryptForDevice(
   plaintext: string,
-  devicePublicKeyBase64: string
+  devicePublicKeyBase64: string,
+  info: string = DEVICE_TOKEN_INFO
 ): { ciphertext: string; nonce: string; serverPublicKey: string } {
   const devicePub = Buffer.from(devicePublicKeyBase64, "base64");
 
@@ -52,7 +55,13 @@ export function encryptForDevice(
   });
 
   // Derive AES key via HKDF
-  const aesKey = crypto.hkdfSync("sha256", sharedSecret, Buffer.alloc(0), HKDF_INFO, KEY_LENGTH);
+  const aesKey = crypto.hkdfSync(
+    "sha256",
+    sharedSecret,
+    Buffer.alloc(0),
+    Buffer.from(info),
+    KEY_LENGTH
+  );
 
   // Encrypt with AES-256-GCM
   const nonce = crypto.randomBytes(12);

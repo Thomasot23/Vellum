@@ -41,6 +41,11 @@ vi.mock("@/lib/content/renderers/room-booking", async (original) => ({
   ...(await original<typeof import("@/lib/content/renderers/room-booking")>()),
   loadRoomModel: vi.fn(),
 }));
+vi.mock("@/lib/status-light", async (original) => ({
+  ...(await original<typeof import("@/lib/status-light")>()),
+  readStatusLightRecord: vi.fn(),
+}));
+import { readStatusLightRecord } from "@/lib/status-light";
 import { validateToken } from "@/lib/auth";
 import { loadRoomModel } from "@/lib/content/renderers/room-booking";
 import { GET } from "../route";
@@ -93,8 +98,33 @@ beforeEach(() => {
   state.presenceFilter = undefined;
   vi.mocked(validateToken).mockResolvedValue(true);
   vi.mocked(loadRoomModel).mockResolvedValue(model);
+  vi.mocked(readStatusLightRecord).mockResolvedValue(null);
 });
 describe("GET room-state", () => {
+  it("names the status-light revision on full, cached and unassigned answers", async () => {
+    const header = "x-status-light-revision";
+    const first = await GET(request());
+    expect(first.headers.get(header)).toBe("none");
+    vi.mocked(readStatusLightRecord).mockResolvedValue({
+      encrypted: "sealed",
+      revision: "0123456789abcdef",
+    });
+    state.rows = [[device], [instance], []];
+    const cached = await GET(request(first.headers.get("etag")!));
+    expect(cached.status).toBe(304);
+    expect(cached.headers.get(header)).toBe("0123456789abcdef");
+    state.rows = [[{ ...device, contentInstanceId: null }]];
+    const unassigned = await GET(request());
+    expect(unassigned.status).toBe(204);
+    expect(unassigned.headers.get(header)).toBe("0123456789abcdef");
+  });
+  it("omits the revision when it cannot be read, and never the secret", async () => {
+    vi.mocked(readStatusLightRecord).mockRejectedValue(new Error("test read failure"));
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    expect(response.headers.has("x-status-light-revision")).toBe(false);
+    expect(await response.text()).not.toContain("sealed");
+  });
   it("records authenticated presence and cadence for full and cached polls", async () => {
     const first = await GET(request());
     expect(new PgDialect().sqlToQuery(state.presenceFilter!).params).toEqual([device.mac]);

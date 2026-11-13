@@ -77,6 +77,41 @@ uses the current room timezone: full brightness from 08:00 through 17:59, 15%
 otherwise. The content shifts a few pixels each minute. These default hours live
 in `PanelPolicy`; no additional administrative scheduling API is introduced.
 
+## Status light
+
+Panels with LED strips can mirror the room state: green while free, red while
+busy. The light is off whenever the panel cannot vouch for the state: before the
+first room arrives, while the calendar provider is unavailable, when the last
+successful poll is older than 180 seconds, and while the screen is dimmed for the
+night. A panel without LEDs, without the vendor service or without a token simply
+shows no light; the display itself never depends on it. "Night" uses the
+dimming hours below, so a room booked in the evening shows no light. When the app
+stops, it switches the lights off.
+
+The app drives the LEDs through the panel vendor's device-local HTTP service on
+`127.0.0.1:3535`. The network security configuration permits cleartext for that
+loopback address only; every other destination stays TLS-only. The service needs a
+vendor token, which is an operator secret:
+
+1. Replace the vendor's default device key on the panel and generate the vendor
+   API token with the vendor's tooling.
+2. Enter the token on the device page in Vellum (**Status light token**). The
+   field is write-only; the console only shows whether a token is stored.
+3. The panel picks it up with its next room poll. Removing the token switches
+   the lights off and deletes it from the panel.
+
+Vellum stores the token encrypted and delivers it only to the enrolled panel,
+sealed with the same envelope as the enrollment token. The panel keeps it in the
+Keystore-encrypted identity and never logs it.
+
+The vendor service also exposes device administration (reboot, screenshot, app
+installation) on the panel's network address. Change the default device key and
+block port 3535 from the network before production use. Keep the panel managed
+with operator-installed apps only: Android cannot verify which process listens on
+the loopback port, so another app holding it would receive the token. Confirm the service, its
+colour support and the meaning of the first `lrgb` component on the target
+firmware; see `SPEC.md` and `SOURCES.md`.
+
 ## Managed kiosk and reboot
 
 Lock-task is enabled only when the app is Device Owner. Unmanaged devices remain

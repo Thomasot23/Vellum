@@ -216,6 +216,16 @@
         "device": "set on this display"
       }
     },
+    "statusLight": {
+      "label": "Status light token",
+      "enter": "Enter token",
+      "replace": "Replace token",
+      "save": "Save",
+      "remove": "Remove",
+      "configured": "A token is stored. It is delivered encrypted to this panel and is not shown again.",
+      "notConfigured": "No token stored. The panel's status light stays off.",
+      "unreadable": "A token is stored but cannot be opened, for example after the server's encryption key changed. Enter it again."
+    },
     "backlight": {
       "label": "Brightness",
       "override": "Set for this display",

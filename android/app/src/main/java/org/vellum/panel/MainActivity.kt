@@ -27,9 +27,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.vellum.panel.data.AssetCache
 import org.vellum.panel.data.FileRoomCache
+import org.vellum.panel.data.LocalHttpStatusLight
 import org.vellum.panel.data.PanelClient
 import org.vellum.panel.data.PanelRepository
 import org.vellum.panel.data.Stage
+import org.vellum.panel.domain.LightPolicy
+import org.vellum.panel.domain.LightSignal
+import org.vellum.panel.domain.NoStatusLight
+import org.vellum.panel.domain.StatusLight
 import org.vellum.panel.enroll.IdentityStore
 import org.vellum.panel.enroll.androidIdentityStore
 import org.vellum.panel.kiosk.PanelPolicy
@@ -44,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private var polling: Job? = null
+    private var signalling: Job? = null
+    private var light: StatusLight = NoStatusLight
     private lateinit var identities: IdentityStore
     private lateinit var repository: PanelRepository
     private lateinit var assetCache: AssetCache
@@ -61,6 +68,7 @@ class MainActivity : ComponentActivity() {
                     FileRoomCache(File(noBackupFilesDir, "room.json")),
                 )
             assetCache = AssetCache(File(noBackupFilesDir, "brand"))
+            light = LocalHttpStatusLight({ repository.statusLightToken() })
         } catch (_: Exception) {
             setContent {
                 androidx.compose.material3.Text(
@@ -138,10 +146,36 @@ class MainActivity : ComponentActivity() {
                     delay(if (repository.snapshot.value.stage == Stage.PENDING) 5000 else 60_000)
                 }
             }
+        signalling =
+            scope.launch {
+                while (isActive) {
+                    signal()
+                    delay(5000)
+                }
+            }
+    }
+
+    /** Follows the same state and the same night dimming as the screen. */
+    private fun signal() {
+        val snapshot = repository.snapshot.value
+        val now = Instant.now()
+        val zone =
+            try {
+                ZoneId.of(snapshot.room?.timezone ?: "UTC")
+            } catch (_: Exception) {
+                ZoneId.of("UTC")
+            }
+        val dimmed = PanelPolicy.brightness(now.atZone(zone).toLocalTime()) < 1f
+        light.show(LightPolicy.signal(snapshot, now, dimmed))
     }
 
     override fun onStop() {
+        signalling?.cancel()
         polling?.cancel()
+        // Nothing keeps the state current once the activity stops, so the LEDs
+        // must not keep claiming it. Own thread: onDestroy may cancel the scope.
+        val stopping = light
+        Thread { stopping.show(LightSignal.OFF) }.start()
         super.onStop()
     }
 

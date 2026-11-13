@@ -41,6 +41,11 @@ import {
   wifiConfigurationInputSchema,
 } from "@/lib/provisioning/remote-configuration";
 import { unifiedRefreshProfileSchema, upgradeRefreshProfileConfig } from "@/lib/sleep";
+import {
+  deleteStatusLightRecord,
+  replaceStatusLightToken,
+  sealStatusLightToken,
+} from "@/lib/status-light";
 
 /** Central RBAC guard for every server action. */
 async function requireAdmin(permission: Permission) {
@@ -279,6 +284,37 @@ export async function setDeviceBacklight(macInput: string, percent: number | nul
       return { id: mac };
     },
     "set-device-backlight",
+    "serializable"
+  );
+  revalidatePath(`/admin/devices/${mac}`);
+}
+
+/**
+ * Store, replace or remove the secret a panel needs for its status light.
+ *
+ * Write-only: the value is sealed before it reaches the database and no action
+ * reads it back. The audit entry says that it changed, never what it is.
+ */
+export async function setDeviceStatusLightToken(macInput: string, token: string | null) {
+  const actor = await requireAdmin("devices.provision");
+  const mac = normalizeProvisioningMac(macInput);
+  const record = token === null ? null : sealStatusLightToken(token.trim());
+
+  await withAuditedTransaction(
+    actor,
+    {
+      action: "device.statusLight.set",
+      targetType: "device",
+      targetId: mac,
+      metadata: { configured: record !== null },
+    },
+    async (tx) => {
+      await replaceStatusLightToken(tx, mac, record);
+      return { id: mac };
+    },
+    "set-device-status-light",
+    // A concurrent deleteDevice must not leave an entry behind for a later
+    // device that enrolls with the same MAC.
     "serializable"
   );
   revalidatePath(`/admin/devices/${mac}`);
@@ -546,6 +582,8 @@ export async function deleteDevice(mac: string) {
           .where(eq(devices.mac, mac))
           .returning({ mac: devices.mac });
         if (deleted.length === 0) throw new Error("device_not_found");
+        // Not tied to the device by a constraint, so it is removed here.
+        await deleteStatusLightRecord(tx, mac);
       },
       "delete-device"
     );

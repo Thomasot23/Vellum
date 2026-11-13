@@ -9,8 +9,8 @@ import { renderQuerySchema } from "@/lib/validation";
 import { apiLimiter, applyRateLimit, getClientIp } from "@/lib/rate-limit";
 import { settingsForDevice } from "@/lib/settings/for-device";
 
-/** Shared authenticated lookup, including site-inherited assignments. */
-export async function readDeviceRoom(request: NextRequest) {
+/** Rate limit, identity and token check, then the device row. Nothing else. */
+export async function readAuthenticatedDevice(request: NextRequest) {
   const limited = applyRateLimit(apiLimiter, getClientIp(request));
   if (limited) return { ok: false as const, response: limited };
   const validation = validateRequest(renderQuerySchema, {
@@ -32,6 +32,14 @@ export async function readDeviceRoom(request: NextRequest) {
       ok: false as const,
       response: Response.json(errorResponse("Device not found"), { status: 404 }),
     };
+  return { ok: true as const, device };
+}
+
+/** Shared authenticated lookup, including site-inherited assignments. */
+export async function readDeviceRoom(request: NextRequest) {
+  const authenticated = await readAuthenticatedDevice(request);
+  if (!authenticated.ok) return authenticated;
+  const { device } = authenticated;
   const settings = await settingsForDevice(device);
   const contentId = settings.values.contentInstanceId;
   const [instance] = contentId

@@ -78,18 +78,30 @@ unverified; see `../DEVICE_CHECKLIST.md`.
 
 - [ ] Spec success criteria 1–6 checked on a real panel
 
-## Phase 5: Status light (planned, not started)
+## Phase 5: Status light (software done, device check open)
 
-See "Planned after v1: status light" in `../SPEC.md`. T14 is a prerequisite for
-T16; T15 can be built and tested without hardware.
+See "Planned after v1: status light" in `../SPEC.md`. T15, T15a, T15b and T16 are
+implemented and tested without hardware; T14 and T17 need a physical panel.
 
-- [ ] **T14 Confirm the LED interface** (S): obtain the vendor's current LED
-      documentation for the delivered panel generation; record mechanism,
-      permissions and licence in `../SOURCES.md`; answer open questions 5–7.
-- [ ] **T15 `StatusLight` abstraction** (S): interface, no-op default, mapping
+- [ ] **T14 Confirm the LED interface** (S): documented interface found (local
+      HTTP service, see `../SPEC.md` and `../SOURCES.md`). Remaining: confirm it
+      on the delivered panel (Android 13, colours, token header) and answer open
+      questions 5–8.
+- [x] **T15 `StatusLight` abstraction** (S): interface, no-op default, mapping
       room state → signal (free, busy, off when dimmed, unknown or stale); JVM
       tests for the mapping incl. offline and night.
-- [ ] **T16 Vendor adapter** (M): adapter for the confirmed interface behind
-      capability detection; failures never affect the display; fake-device tests.
+- [x] **T15a Server: status-light secret** (M): write-only per-device field in
+      the console, encrypted at rest, audited without the value; optional revision
+      marker in `room-state`; device-authenticated endpoint returning the
+      `encryptForDevice` envelope; vitest for auth, ownership, absence and
+      rotation and cleanup on device deletion. Storage: settings store, no
+      migration.
+- [x] **T15b App: receive and store the secret** (S): fetch on marker change,
+      decrypt, Keystore-wrap, clear on removal; JVM tests with the shared envelope
+      fixture.
+- [x] **T16 Vendor adapter** (M): loopback HTTP adapter behind capability
+      detection; cleartext limited to `127.0.0.1`; token stored encrypted and
+      never logged; failures never affect the display; local test-server tests.
 - [ ] **T17 On-device check** (S): extend `../DEVICE_CHECKLIST.md` (free, busy,
-      offline, night, reboot) and run it on the panel.
+      offline, night, reboot; default device key replaced, port 3535 restricted)
+      and run it on the panel.

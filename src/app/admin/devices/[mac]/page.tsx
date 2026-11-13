@@ -22,6 +22,7 @@ import {
 } from "../../actions";
 import { getCurrentPrincipal, hasPermission } from "@/lib/access";
 import { explainDeviceSettings } from "@/lib/settings/for-device";
+import { openStatusLightToken, readStatusLightRecord } from "@/lib/status-light";
 
 export default async function DeviceDetailPage({ params }: { params: Promise<{ mac: string }> }) {
   const { mac } = await params;
@@ -108,6 +109,17 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ m
   /* Resolved with the workspace defaults included, so the page can name where
      each value comes from instead of leaving an operator to infer it. */
   const effective = await explainDeviceSettings(device);
+  /* Only whether one exists and can be opened. The secret never reaches a page. */
+  const statusLightRecord = await readStatusLightRecord(device.mac);
+  let statusLight: "none" | "stored" | "unreadable" = "none";
+  if (statusLightRecord) {
+    try {
+      openStatusLightToken(statusLightRecord);
+      statusLight = "stored";
+    } catch {
+      statusLight = "unreadable";
+    }
+  }
   const t = await getTranslations("devices");
 
   return (
@@ -134,6 +146,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ m
               : command.payload,
         }))}
         canProvision={hasPermission(principal, "devices.provision")}
+        statusLight={statusLight}
       />
     </div>
   );

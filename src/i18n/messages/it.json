@@ -216,6 +216,16 @@
         "device": "impostato su questo display"
       }
     },
+    "statusLight": {
+      "label": "Token della luce di stato",
+      "enter": "Inserisci token",
+      "replace": "Sostituisci token",
+      "save": "Salva",
+      "remove": "Rimuovi",
+      "configured": "Un token è memorizzato. Viene consegnato cifrato a questo pannello e non viene più mostrato.",
+      "notConfigured": "Nessun token memorizzato. La luce di stato del pannello resta spenta.",
+      "unreadable": "Un token è memorizzato ma non può essere decifrato, ad esempio dopo un cambio della chiave del server. Inseriscilo di nuovo."
+    },
     "backlight": {
       "label": "Luminosità",
       "override": "Imposta per questo display",

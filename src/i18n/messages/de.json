@@ -216,6 +216,16 @@
         "device": "an diesem Display gesetzt"
       }
     },
+    "statusLight": {
+      "label": "Token für Statuslicht",
+      "enter": "Token eingeben",
+      "replace": "Token ersetzen",
+      "save": "Speichern",
+      "remove": "Entfernen",
+      "configured": "Ein Token ist hinterlegt. Es wird verschlüsselt an dieses Panel ausgeliefert und nicht wieder angezeigt.",
+      "notConfigured": "Kein Token hinterlegt. Das Statuslicht des Panels bleibt aus.",
+      "unreadable": "Ein Token ist hinterlegt, lässt sich aber nicht entschlüsseln, etwa nach einem Wechsel des Server-Schlüssels. Bitte erneut eingeben."
+    },
     "backlight": {
       "label": "Helligkeit",
       "override": "Für dieses Display setzen",

@@ -216,6 +216,16 @@
         "device": "definido en esta pantalla"
       }
     },
+    "statusLight": {
+      "label": "Token de la luz de estado",
+      "enter": "Introducir token",
+      "replace": "Sustituir token",
+      "save": "Guardar",
+      "remove": "Quitar",
+      "configured": "Hay un token guardado. Se entrega cifrado a este panel y no se vuelve a mostrar.",
+      "notConfigured": "No hay token guardado. La luz de estado del panel permanece apagada.",
+      "unreadable": "Hay un token guardado, pero no se puede descifrar, por ejemplo tras cambiar la clave del servidor. Vuelva a introducirlo."
+    },
     "backlight": {
       "label": "Brillo",
       "override": "Definir para esta pantalla",

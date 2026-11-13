@@ -216,6 +216,16 @@
         "device": "défini sur cet écran"
       }
     },
+    "statusLight": {
+      "label": "Jeton du voyant d’état",
+      "enter": "Saisir le jeton",
+      "replace": "Remplacer le jeton",
+      "save": "Enregistrer",
+      "remove": "Supprimer",
+      "configured": "Un jeton est enregistré. Il est transmis chiffré à ce panneau et n’est plus affiché.",
+      "notConfigured": "Aucun jeton enregistré. Le voyant d’état du panneau reste éteint.",
+      "unreadable": "Un jeton est enregistré mais ne peut pas être déchiffré, par exemple après un changement de la clé du serveur. Saisissez-le à nouveau."
+    },
     "backlight": {
       "label": "Luminosité",
       "override": "Définir pour cet écran",

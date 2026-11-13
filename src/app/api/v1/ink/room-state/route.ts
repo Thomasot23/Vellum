@@ -10,6 +10,11 @@ import { completeDisplayCaps, mergeReportedCaps, resolveDisplayCaps } from "@/li
 import { loadRoomModel } from "@/lib/content/renderers/room-booking";
 import { buildRoomState, matchesEntityTag, roomStateTag } from "@/lib/room-state";
 import { errorResponse } from "@/lib/api-response";
+import {
+  readStatusLightRecord,
+  STATUS_LIGHT_NONE,
+  STATUS_LIGHT_REVISION_HEADER,
+} from "@/lib/status-light";
 
 export async function GET(request: NextRequest) {
   const context = await readDeviceRoom(request);
@@ -30,7 +35,15 @@ export async function GET(request: NextRequest) {
         .where(eq(devices.mac, device.mac)),
     "room-state-presence"
   ).catch(() => log.warn("Native panel presence update failed"));
-  const headers = { "Cache-Control": "private, no-cache" };
+  // Names the current status-light secret so the panel knows when to fetch it.
+  // Omitted when the lookup fails: "unknown" must not read as "removed".
+  const lightRevision = await readStatusLightRecord(device.mac)
+    .then((record) => record?.revision ?? STATUS_LIGHT_NONE)
+    .catch(() => null);
+  const headers: Record<string, string> = {
+    "Cache-Control": "private, no-cache",
+    ...(lightRevision ? { [STATUS_LIGHT_REVISION_HEADER]: lightRevision } : {}),
+  };
   if (!instance) return new Response(null, { status: 204, headers });
   if (instance.typeSlug !== "room-booking") {
     return Response.json(errorResponse("Assigned content is not a room"), { status: 422, headers });

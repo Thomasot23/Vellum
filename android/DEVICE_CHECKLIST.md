@@ -49,6 +49,17 @@ are available. Until then these are unverified, not waived acceptance criteria.
 - [ ] Provision the approved kiosk method; verify exit restrictions and restart after reboot.
 - [ ] Check night brightness against actual opening-hour requirements.
 - [ ] Run 24 hours on the physical panel; inspect memory trend, network recovery and display behavior.
+- [ ] Status light, if the panel has LEDs: replace the vendor's default device key,
+      generate the vendor API token, store it in the console for this panel and
+      check that the panel picks it up within one poll.
+- [ ] Status light: green while free, red while busy, off at night, off within
+      three minutes of losing the network, off after the token is removed.
+- [ ] Status light: block the vendor service port (3535) from the network; the
+      panel itself reaches it on the loopback address only.
+- [ ] Status light: only operator-installed apps on the panel (managed device);
+      any app could otherwise claim the port before the vendor service.
+- [ ] Status light: after re-enrolling a panel, enter its token again for the new
+      device identity and delete the old device entry.
 
 ## Release gate
 

@@ -21,4 +21,6 @@ snapping is applied to native full-color themes.
 
 - [Vendor LED control guide, 2020](https://www.syscomtec.com/_produktbereich/source/Artikel/Artikel%207977/PRODVX%20APPC-10SLB%20&%20IPPC-10SLB,%20APPC-10XPL%20LED%20Control%20SDK.pdf): serial-port sample project for first-generation panels; APPC-10XPL strips switch together (all off, all on, red, green, blue). Sample code and its licence not reviewed.
 - [Vendor Android version table](https://support.prodvx.com/support/solutions/articles/48001247034-available-android-versions-on-prodvx-devices): current 10.1" models ship with Android 12 or 13.
-- The interface of the current panel generation is unconfirmed; nothing is implemented against it yet.
+- [Vendor API quick start guide v1.2](https://www.syscomtec.com/_produktbereich/source/Artikel/Artikel%209046/PRODVX%20API%20Quick%20Start%20Guide%20v1.2.pdf): device-local HTTP service on port 3535 with `setAllLeds`, `setAllLedsOff` and `setLeds`; token from the vendor portal; names Android 8.1 to 12.
+- [Vendor API announcement](https://www.prodvx.com/blog/simplified-development-with-prodvx-api): REST service giving unsigned apps access to the LED controller; pre-installed on new R23 models since Q2 2024.
+- Not yet confirmed on a device: Android 13 support, accepted colours on side-strip models, header name for the token. Nothing is implemented yet.

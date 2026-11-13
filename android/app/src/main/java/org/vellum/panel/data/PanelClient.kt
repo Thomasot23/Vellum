@@ -39,6 +39,20 @@ data class RoomReply(
     val status: Int,
     val etag: String?,
     val room: RoomState?,
+    /** Revision of the status-light secret, "none", or null when the server did not say. */
+    val lightRevision: String? = null,
+)
+
+@Serializable private data class LightSecretBody(
+    val version: Int,
+    val revision: String,
+    val encryptedToken: TokenEnvelope,
+)
+
+data class LightSecretReply(
+    val status: Int,
+    val revision: String?,
+    val envelope: TokenEnvelope?,
 )
 
 data class AssetReply(
@@ -47,6 +61,9 @@ data class AssetReply(
     val bytes: ByteArray?,
     val mime: String?,
 )
+
+const val LIGHT_REVISION_NONE = "none"
+private val LIGHT_REVISION = Regex("none|[0-9a-f]{16}")
 
 /** TLS verification stays enabled; redirects never receive device credentials. */
 class PanelClient(
@@ -148,7 +165,27 @@ class PanelClient(
                 } else {
                     null
                 },
+                it.header("X-Status-Light-Revision")?.takeIf(LIGHT_REVISION::matches),
             )
+        }
+    }
+
+    /** The sealed status-light secret. 204 means the server holds none for this panel. */
+    fun statusLight(identity: DeviceIdentity): LightSecretReply {
+        val request =
+            Request
+                .Builder()
+                .url(url("/api/v1/ink/status-light", identity.mac))
+                .header("x-device-token", requireNotNull(identity.token))
+                .build()
+        return http.newCall(request).execute().use {
+            if (it.code != 200) return@use LightSecretReply(it.code, null, null)
+            val parsed =
+                PanelJson.decodeFromString<LightSecretBody>(
+                    body(it, 16 * 1024).toString(Charsets.UTF_8),
+                )
+            require(parsed.version == 1 && LIGHT_REVISION.matches(parsed.revision))
+            LightSecretReply(200, parsed.revision, parsed.encryptedToken)
         }
     }
 

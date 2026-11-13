@@ -115,4 +115,26 @@ class CryptoTest {
         file.writeBytes(broken)
         assertThrows(Exception::class.java) { store.load() }
     }
+
+    @Test fun keepsStatusLightAndEnrollmentEnvelopesApart() {
+        val json =
+            PanelJson
+                .parseToJsonElement(
+                    javaClass.getResource("/status-light-envelope.json")!!.readText(),
+                ).jsonObject
+        val envelope =
+            TokenEnvelope(
+                json["ciphertext"]!!.jsonPrimitive.content,
+                json["nonce"]!!.jsonPrimitive.content,
+                json["serverPublicKey"]!!.jsonPrimitive.content,
+            )
+        assertEquals(
+            "public-status-light-test",
+            TokenCrypto.decrypt(scalar, envelope, TokenCrypto.STATUS_LIGHT_INFO),
+        )
+        assertThrows(Exception::class.java) { TokenCrypto.decrypt(scalar, envelope) }
+        assertThrows(Exception::class.java) {
+            TokenCrypto.decrypt(scalar, fixture(), TokenCrypto.STATUS_LIGHT_INFO)
+        }
+    }
 }

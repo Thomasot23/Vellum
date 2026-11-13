@@ -66,11 +66,15 @@ class PanelRepository(
     private val now: () -> Instant = Instant::now,
 ) {
     private var etag: String? = null
+
+    /** Read by the status light every few seconds, so kept here instead of reloaded. */
+    @Volatile private var lightToken: String? = null
     private val mutable = MutableStateFlow(restore())
     val snapshot = mutable.asStateFlow()
 
     private fun restore(): Snapshot {
         val identity = identities.load() ?: return Snapshot()
+        lightToken = identity.lightToken
         val cached = cache.load()
         if (identity.token != null && cached?.server == identity.server &&
             cached.mac == identity.mac
@@ -102,10 +106,12 @@ class PanelRepository(
         identities.save(identity)
         cache.clear()
         etag = null
+        lightToken = null
         mutable.value = Snapshot(Stage.PENDING, mac = identity.mac)
     }
 
     fun reset() {
+        lightToken = null
         identities.clear()
         cache.clear()
         etag = null
@@ -136,6 +142,9 @@ class PanelRepository(
                 identities.save(identity)
             }
             val reply = api.room(identity, etag)
+            if (reply.status in setOf(200, 204, 304)) {
+                identity = syncStatusLight(api, identity, reply.lightRevision)
+            }
             when (reply.status) {
                 200 -> {
                     val room = requireNotNull(reply.room)
@@ -166,7 +175,8 @@ class PanelRepository(
                     mutable.value = current.copy(lastSuccess = time, offlineSince = null)
                 }
                 401 -> {
-                    identities.save(identity.copy(token = null))
+                    identities.save(identity.copy(token = null, lightToken = null, lightRevision = null))
+                    lightToken = null
                     clearRoom(Stage.PENDING, identity.mac)
                 }
                 204 -> clearRoom(Stage.UNASSIGNED, identity.mac)
@@ -188,6 +198,53 @@ class PanelRepository(
                     offlineSince =
                         previous.offlineSince ?: previous.lastSuccess ?: now(),
                 )
+        }
+    }
+
+    /** The vendor secret for the status light, or null when the panel has none. */
+    fun statusLightToken(): String? = lightToken
+
+    /**
+     * Follow the server's revision of the status-light secret. Never fatal: a panel
+     * that cannot fetch or open the secret still shows its room, and tries again on
+     * the next poll because the stored revision is left unchanged.
+     */
+    private fun syncStatusLight(
+        api: PanelClient,
+        identity: DeviceIdentity,
+        revision: String?,
+    ): DeviceIdentity {
+        if (revision == null || revision == identity.lightRevision) return identity
+        return try {
+            val updated =
+                if (revision == LIGHT_REVISION_NONE) {
+                    identity.copy(lightToken = null, lightRevision = LIGHT_REVISION_NONE)
+                } else {
+                    val reply = api.statusLight(identity)
+                    when (reply.status) {
+                        204 -> identity.copy(lightToken = null, lightRevision = LIGHT_REVISION_NONE)
+                        200 -> {
+                            val key = Base64.getDecoder().decode(identity.privateKey)
+                            val token =
+                                try {
+                                    TokenCrypto.decrypt(
+                                        key,
+                                        requireNotNull(reply.envelope),
+                                        TokenCrypto.STATUS_LIGHT_INFO,
+                                    )
+                                } finally {
+                                    key.fill(0)
+                                }
+                            identity.copy(lightToken = token, lightRevision = reply.revision)
+                        }
+                        else -> return identity
+                    }
+                }
+            identities.save(updated)
+            lightToken = updated.lightToken
+            updated
+        } catch (_: Exception) {
+            identity
         }
     }
 

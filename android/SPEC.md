@@ -189,7 +189,8 @@ unit test that compares both tables.
 
 ## Planned after v1: status light
 
-Status: planned, not started. Blocked on vendor documentation and a physical panel.
+Status: implemented and tested without hardware (T15, T15a, T15b, T16). Not yet
+verified on a physical panel (T14 remainder, T17).
 
 Some target panels carry LED strips (two side strips on the APPC-10XPL, a surround
 bar on the APPC-10SLB). The app should mirror the room state on them so that the
@@ -210,25 +211,96 @@ Intended behaviour:
 
 Design constraints:
 
-- One small interface (`StatusLight`: `show(state)`, `off()`), a no-op default and
+- One small interface (`StatusLight.show(signal)`, where `OFF` is a signal), a no-op default and
   one adapter per vendor mechanism, selected at runtime by capability detection.
   The domain layer never sees vendor types.
 - No server change: the state already arrives in `room-state`.
 - Vendor code is not copied into the repository unless its licence permits it. The
   adapter talks to the documented device interface directly.
 
-Known so far (see `SOURCES.md`): the vendor's 2020 LED guide describes a
-serial-port sample project for the first-generation panels and states that the
-APPC-10XPL strips can only be switched together. Whether the current R23
-generation uses the same interface, a broadcast intent or a local HTTP service is
-unconfirmed and has to be asked of the vendor.
+Known so far (see `SOURCES.md`): the vendor documents a device-local HTTP service
+("ProDVX API", quick start guide v1.2) on port 3535, pre-installed on the R23
+generation according to the vendor:
+
+- `GET /v1/setAllLeds?lrgb=<LRGB>` sets all LEDs; `LRGB` is `0xFFFFFFFF` or
+  `255,255,255,255`. The guide does not explain the first component; it is assumed
+  to be the level and must be confirmed on a device.
+- `GET /v1/setAllLedsOff` switches them off. `setLeds` addresses 52 single LEDs and
+  only applies to surround-bar models.
+- Every call needs a token, as a query parameter or "in a header" (header name not
+  documented). The token is generated in the vendor's management portal from a
+  per-device key that ships with a documented default.
+
+Consequences for the design:
+
+- The adapter is a loopback HTTP client. Cleartext traffic is allowed for
+  `127.0.0.1` only; every other destination stays TLS-only.
+- The vendor token is a secret. It is stored like the device token (Keystore
+  wrapped, never logged) and never placed in the repository.
+- Decision: the vendor token is managed in Vellum per device and delivered to the
+  panel; nothing is typed on the device. See "Token delivery" below.
+- The same service also exposes reboot, screenshot and APK installation on the
+  panel's network address. Operators must replace the default device key and
+  restrict port 3535 on the network. This goes into the device checklist.
+
+Unconfirmed: support on Android 13 (the guide names Android 8.1 to 12), behaviour
+of the two side strips of the APPC-10XPL under `setAllLeds` (the 2020 serial-port
+guide limits them to off, on, red, green and blue), and the header name.
 
 Additional open questions:
 
 5. Should "soon" have its own colour where the hardware allows it?
 6. Stale or offline state: lights off (proposed) or keep the last colour?
-7. Which LED interface does the delivered panel generation expose, and under which
-   licence may its sample code be used?
+7. Does the delivered panel (Android 13) run the documented service, and which
+   colours do its strips accept?
+8. Decided: the vendor token is stored in the existing key-value settings store,
+   one entry per device. No schema migration; deleting a device removes its entry
+   in code.
+
+### Token delivery
+
+- **Console:** a write-only field per device. The value is never shown again,
+  only "set" or "not set"; changes are audited without the value and need the
+  `devices.provision` permission, like other device secrets such as Wi-Fi
+  credentials.
+- **At rest:** one entry per device in the key-value settings store, encrypted
+  with the server's existing credential encryption (`src/lib/encryption.ts`), like
+  data-provider credentials. Device deletion removes the entry.
+- **In transit:** never in `room-state`, which is cached and hashed. Every
+  `room-state` answer (200, 304 and 204) carries the response header
+  `X-Status-Light-Revision`: a 16-hex-digit revision, or `none`. The JSON
+  contract is unchanged. When the revision differs from the stored one, the app
+  calls `GET /api/v1/ink/status-light` (same device authentication). It answers
+  204 without a secret, or `{version: 1, revision, encryptedToken}` with the same
+  X25519/AES-GCM envelope as the enrollment token (`encryptForDevice`), so only
+  the enrolled panel can read it. The header is omitted when the server cannot
+  read the entry, so "unknown" never reads as "removed".
+- **On the panel:** decrypted, stored Keystore-wrapped, never logged. Removing the
+  value in the console clears it on the panel and switches the lights off.
+- This adds one endpoint and one response header; both are additive and leave
+  existing devices untouched.
+- **Light behaviour (app):** checked every 5 s against the same snapshot and night
+  dimming as the screen; off when not active, when the calendar is unavailable,
+  when the last successful poll is older than 180 s, or at night. An unchanged
+  signal is repeated every 5 minutes in case the vendor service restarted. After
+  the secret is removed, the lights are switched off once with the last secret.
+  A replacement the vendor service rejects switches the lights off once with the
+  last accepted token, which is kept until a replacement works.
+- **Envelope:** its own HKDF context (`vellum-status-light-v1`), so a status-light
+  envelope can never pass for an enrollment token, or the reverse.
+- **Known limits:**
+  - "Night" means the existing dimming hours (`PanelPolicy`: outside 08:00 to
+    17:59). A room booked in the evening shows no light.
+  - When the activity stops, the lights are switched off. If the process is
+    killed outright, the vendor service keeps the last colour until the app runs
+    again.
+  - Any app on the panel that binds port 3535 before the vendor service would
+    receive the token. Android does not let an app check the owner of a loopback
+    socket, so this relies on a managed panel with operator-installed apps only.
+  - The entry belongs to one enrollment. A panel that enrolls again gets a new
+    device identity, and the token must be entered for it again.
+  - If the server's `ENCRYPTION_KEY` changes, the console shows the entry as
+    unreadable and the panel keeps its last copy until the token is entered again.
 
 ## Server API contract (version 1)
 
