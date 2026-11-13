@@ -77,3 +77,19 @@ panel is available. Physical acceptance and a 24-hour hardware run remain
 unverified; see `../DEVICE_CHECKLIST.md`.
 
 - [ ] Spec success criteria 1–6 checked on a real panel
+
+## Phase 5: Status light (planned, not started)
+
+See "Planned after v1: status light" in `../SPEC.md`. T14 is a prerequisite for
+T16; T15 can be built and tested without hardware.
+
+- [ ] **T14 Confirm the LED interface** (S): obtain the vendor's current LED
+      documentation for the delivered panel generation; record mechanism,
+      permissions and licence in `../SOURCES.md`; answer open questions 5–7.
+- [ ] **T15 `StatusLight` abstraction** (S): interface, no-op default, mapping
+      room state → signal (free, busy, off when dimmed, unknown or stale); JVM
+      tests for the mapping incl. offline and night.
+- [ ] **T16 Vendor adapter** (M): adapter for the confirmed interface behind
+      capability detection; failures never affect the display; fake-device tests.
+- [ ] **T17 On-device check** (S): extend `../DEVICE_CHECKLIST.md` (free, busy,
+      offline, night, reboot) and run it on the panel.

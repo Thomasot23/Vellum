@@ -187,6 +187,49 @@ unit test that compares both tables.
 4. Do you want the house face (Unit) on the panel once the licence is clear, or
    stay with the open face?
 
+## Planned after v1: status light
+
+Status: planned, not started. Blocked on vendor documentation and a physical panel.
+
+Some target panels carry LED strips (two side strips on the APPC-10XPL, a surround
+bar on the APPC-10SLB). The app should mirror the room state on them so that the
+state is readable along the corridor.
+
+Intended behaviour:
+
+- Free → green, busy → red. The colours are fixed signal colours, not theme
+  colours, because some panels only offer all-off, all-on, red, green and blue for
+  the whole strip.
+- "Soon" keeps the free colour unless the hardware offers a distinct colour and the
+  operator wants one (open question 5).
+- Lights are off while the screen is dimmed at night, before the first room state
+  has arrived, and while the cached state is stale (open question 6). A stale
+  panel must not signal "free".
+- No LED hardware, or an unknown model: the feature is silently inactive. Nothing
+  else in the app depends on it.
+
+Design constraints:
+
+- One small interface (`StatusLight`: `show(state)`, `off()`), a no-op default and
+  one adapter per vendor mechanism, selected at runtime by capability detection.
+  The domain layer never sees vendor types.
+- No server change: the state already arrives in `room-state`.
+- Vendor code is not copied into the repository unless its licence permits it. The
+  adapter talks to the documented device interface directly.
+
+Known so far (see `SOURCES.md`): the vendor's 2020 LED guide describes a
+serial-port sample project for the first-generation panels and states that the
+APPC-10XPL strips can only be switched together. Whether the current R23
+generation uses the same interface, a broadcast intent or a local HTTP service is
+unconfirmed and has to be asked of the vendor.
+
+Additional open questions:
+
+5. Should "soon" have its own colour where the hardware allows it?
+6. Stale or offline state: lights off (proposed) or keep the last colour?
+7. Which LED interface does the delivered panel generation expose, and under which
+   licence may its sample code be used?
+
 ## Server API contract (version 1)
 
 Both GET endpoints require `?mac=AABBCCDDEEFF` and `x-device-token`. MACs with

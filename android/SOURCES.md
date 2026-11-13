@@ -16,3 +16,9 @@ public test envelope is checked independently by Node and Kotlin. The room JSON
 contract is `src/lib/room-state.ts`; both runtimes parse the same fixture. The
 large-text contrast threshold matches `src/lib/theme.ts` (3:1); no palette
 snapping is applied to native full-color themes.
+
+## Status light (planned)
+
+- [Vendor LED control guide, 2020](https://www.syscomtec.com/_produktbereich/source/Artikel/Artikel%207977/PRODVX%20APPC-10SLB%20&%20IPPC-10SLB,%20APPC-10XPL%20LED%20Control%20SDK.pdf): serial-port sample project for first-generation panels; APPC-10XPL strips switch together (all off, all on, red, green, blue). Sample code and its licence not reviewed.
+- [Vendor Android version table](https://support.prodvx.com/support/solutions/articles/48001247034-available-android-versions-on-prodvx-devices): current 10.1" models ship with Android 12 or 13.
+- The interface of the current panel generation is unconfirmed; nothing is implemented against it yet.

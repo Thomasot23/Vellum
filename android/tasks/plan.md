@@ -50,6 +50,8 @@ T2 registry entry ──────┤
    receives and caches a room state. Checkpoint with the user before UI.
 3. **Layouts** (T8–T11): both layouts and navigation, Compose UI tests.
 4. **Operation** (T12–T13): kiosk, boot, offline, night; on-device checklist.
+5. **Status light** (T14–T17, planned): mirror the room state on panel LEDs.
+   Starts only after the vendor interface is confirmed.
 
 ## Risks and Mitigations
 
@@ -66,3 +68,5 @@ T2 registry entry ──────┤
 
 - Android version on the panels (affects `minSdk`).
 - Device-owner kiosk or ProDVX kiosk setting.
+- Status light (phase 5, planned): LED interface of the delivered panel
+  generation, colour for "soon", behaviour while stale. See `../SPEC.md`.
