@@ -15,25 +15,28 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class DeviceKeystoreTest {
-    @Test fun debugPreviewStartsOnAndroid() {
-        androidx.test.core.app.ActivityScenario.launch(DemoActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                org.junit.Assert.assertTrue(
-                    activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON !=
-                        0,
-                )
-            }
-        }
-    }
+    @Test fun debugPreviewStartsOnAndroid() = verifyActivityStart(DemoActivity::class.java)
 
-    @Test fun mainActivityStartsOnAndroid() {
-        androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+    @Test fun mainActivityStartsOnAndroid() = verifyActivityStart(MainActivity::class.java)
+
+    private fun <T : androidx.activity.ComponentActivity> verifyActivityStart(type: Class<T>) {
+        val scenario =
+            androidx.test.core.app.ActivityScenario
+                .launch(type)
+        try {
             scenario.onActivity { activity ->
                 org.junit.Assert.assertTrue(
                     activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON !=
                         0,
                 )
             }
+        } finally {
+            // Android refuses to finish the root activity while Lock Task is active.
+            scenario.onActivity { activity ->
+                val policy = activity.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+                if (policy.isDeviceOwnerApp(activity.packageName)) activity.stopLockTask()
+            }
+            scenario.close()
         }
     }
 
