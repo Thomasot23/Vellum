@@ -22,3 +22,8 @@ public/*.js
 data/
 deploy/data/
 deploy/.vellum/
+
+# Android local tool state
+android/.gradle/
+android/.kotlin/
+android/local.properties

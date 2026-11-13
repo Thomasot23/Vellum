@@ -1,0 +1,12 @@
+<resources>
+    <string name="state_free">"LIBERO"</string>
+    <string name="state_busy">"OCCUPATO"</string>
+    <string name="updated">"aggiornato"</string>
+    <string name="book">"Prenota"</string>
+    <string name="until">"fino alle"</string>
+    <string name="next">"Successivo"</string>
+    <string name="today">"Oggi"</string>
+    <string name="noneLeft">"Nessun’altra prenotazione oggi"</string>
+    <string name="scanHint">"Scansiona il codice per prenotare"</string>
+    <string name="clockSuffix">""</string>
+</resources>

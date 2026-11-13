@@ -1,0 +1,9 @@
+.gradle/
+.kotlin/
+local.properties
+*.jks
+*.keystore
+
+# Source package, distinct from runtime data directories.
+!app/src/main/java/org/vellum/panel/data/
+!app/src/main/java/org/vellum/panel/data/**

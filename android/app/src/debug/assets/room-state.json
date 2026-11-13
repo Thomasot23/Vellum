@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "room": {
+    "name": "Meeting Room",
+    "subtitle": null
+  },
+  "locale": "en",
+  "timezone": "UTC",
+  "dateFormat": "PPPP",
+  "layout": "status-panel",
+  "state": {
+    "isRoomFree": false,
+    "providerUnavailable": false,
+    "nextEventStart": null
+  },
+  "events": [
+    {
+      "start": "2026-11-12T09:00:00.000Z",
+      "end": "2026-11-12T11:00:00.000Z",
+      "subject": "Planning",
+      "organizer": "",
+      "isPrivate": false
+    }
+  ],
+  "theme": {
+    "name": "Default",
+    "headerBg": "#000000",
+    "headerText": "#FFFFFF",
+    "freeBadge": "#00FF00",
+    "busyBadge": "#FF0000",
+    "badgeText": "#FFFFFF",
+    "background": "#FFFFFF",
+    "eventBg": "#0000FF",
+    "slotText": "#FFFFFF",
+    "slotSecondary": "#000000",
+    "footerText": "#000000"
+  },
+  "brand": {
+    "titleLines": [],
+    "subtitleLines": [],
+    "wordmarkAssetId": null,
+    "markAssetId": null
+  },
+  "booking": {
+    "url": null,
+    "visibility": "never",
+    "showQr": false
+  },
+  "serverTime": "2026-11-12T10:00:00.000Z"
+}

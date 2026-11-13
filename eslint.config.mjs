@@ -9,6 +9,9 @@ export default tseslint.config(
   {
     ignores: [
       ".next/",
+      "android/**/build/",
+      "android/.gradle/",
+      "android/.kotlin/",
       "node_modules/",
       "drizzle/",
       "firmware/",

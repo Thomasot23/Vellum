@@ -29,43 +29,49 @@ CI environment values; no runtime credentials or live services were used.
 
 ## Phase 2: Foundation
 
-- [ ] **T4 Android project skeleton** (M)
+- [x] **T4 Android project skeleton** (M)
   - Acceptance: Gradle KTS + version catalog, Compose app shows a placeholder at
     1280×800, ktlint and lint configured, unit test runs.
   - Verify: `./gradlew assembleDebug testDebugUnitTest lintDebug ktlintCheck`
-- [ ] **T5 Token crypto** (S)
+- [x] **T5 Token crypto** (S)
   - Acceptance: X25519 key pair, HKDF-SHA256 (`vellum-token-v1`), AES-256-GCM
     decrypt of a server-produced fixture; private key encrypted with Keystore.
   - Verify: JVM unit test against fixture from `encryptForDevice`
-- [ ] **T6 Enroll flow** (M)
+- [x] **T6 Enroll flow** (M)
   - Acceptance: first-run screen asks for server URL; generates identity; hello
     loop shows "waiting for approval" with the device ID; stores token on approval.
   - Verify: unit tests with a fake server; manual run against test server
-- [ ] **T7 API client and cache** (M)
+- [x] **T7 API client and cache** (M)
   - Acceptance: polls `room-state` every 60 s with ETag; keeps last state on disk;
     exposes `StateFlow<Snapshot>` with `lastSuccess` timestamp; downloads assets on change.
   - Verify: unit tests with MockWebServer (200, 304, 401 → re-enroll, timeout)
 
-### Checkpoint 2 (review with user)
+### Checkpoint 2 (continued by user instruction on 2026-11-13)
 
-- [ ] App enrolls on the test server and logs a parsed room state
+- [x] Automated local HTTP enrollment, server-token interoperability and parsed room state verified without logging secrets.
+- [ ] Live enrollment against the deployed Vellum service remains pending service rollout approval.
 
 ## Phase 3: Layouts
 
-- [ ] **T8 Domain and theme** (S): `momentOf`, list selection, `readableOn`, theme → Compose colours; ported tests from `room-status.test.ts`.
-- [ ] **T9 Status-panel layout** (M): Compose screen matching the server layout incl. tinted wordmark/mark, QR, offline notice; UI tests free/soon/busy/offline at 1280×800 and 800×1280.
-- [ ] **T10 Day-band layout** (M): chip, band with lanes and now-line, QR; same UI tests.
-- [ ] **T11 Day list, week view, idle return** (M): touch navigation, 30 s auto-return; UI tests.
+- [x] **T8 Domain and theme** (S): `momentOf`, list selection, `readableOn`, theme → Compose colours; ported tests from `room-status.test.ts`.
+- [x] **T9 Status-panel layout** (M): Compose screen matching the server layout incl. tinted wordmark/mark, QR, offline notice; UI tests free/soon/busy/offline at 1280×800 and 800×1280.
+- [x] **T10 Day-band layout** (M): chip, band with lanes and now-line, QR; same UI tests.
+- [x] **T11 Day list, week view, idle return** (M): touch navigation, 30 s auto-return; UI tests.
 
 ### Checkpoint 3
 
-- [ ] Both layouts render from the contract fixture; all tests green; screenshots reviewed
+- [x] Both layouts render from the contract fixture; all tests green; emulator screenshots reviewed
 
 ## Phase 4: Operation
 
-- [ ] **T12 Kiosk, boot, night** (M): boot receiver, keep-screen-on, lock-task when device owner, dimming outside opening hours, burn-in pixel shift.
-- [ ] **T13 Device checklist and docs** (S): README in `android/`, enroll/approve/test checklist for the APPC-10S, release APK build instructions.
+- [x] **T12 Kiosk, boot, night** (M): boot receiver, keep-screen-on, lock-task when device owner, dimming outside opening hours, burn-in pixel shift.
+- [x] **T13 Device checklist and docs** (S): README in `android/`, enroll/approve/test checklist for the APPC-10S, release APK build instructions.
 
 ### Checkpoint 4
+
+All software tasks T1–T13 are implemented. Debug/release builds, JVM/Compose
+checks, Android Keystore instrumentation and emulator layout review are complete.
+Physical hardware, integrated service rollout and the 24-hour device run are
+required to close final acceptance; see `../DEVICE_CHECKLIST.md`.
 
 - [ ] Spec success criteria 1–6 checked on a real panel
