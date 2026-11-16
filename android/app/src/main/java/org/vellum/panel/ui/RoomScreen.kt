@@ -61,6 +61,7 @@ import org.vellum.panel.data.RoomState
 import org.vellum.panel.data.Snapshot
 import org.vellum.panel.domain.Palette
 import org.vellum.panel.domain.RoomLogic
+import org.vellum.panel.kiosk.PanelPolicy
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -121,7 +122,7 @@ fun RoomScreen(
         if (view !=
             "home"
         ) {
-            delay(30_000)
+            delay(PanelPolicy.RETURN_HOME_MS)
             view = "home"
             selectedDay = 0
         }

@@ -85,13 +85,16 @@ class RoomScreenTest {
         }
     }
 
-    @Test fun dayWeekNavigationAndThirtySecondReturnWork() {
+    @Test fun dayWeekNavigationAndTwentySecondReturnWork() {
         compose.setContent { RoomScreen(Snapshot(Stage.ACTIVE, fixture, now), now) }
         compose.onNodeWithTag("nav-week").performClick()
         compose.onNodeWithTag("week").assertIsDisplayed()
         compose.onNodeWithTag("week-day-0").performClick()
         compose.onNodeWithTag("day-list").assertIsDisplayed()
-        compose.mainClock.advanceTimeBy(31_000)
+        compose.mainClock.advanceTimeBy(19_000)
+        compose.waitForIdle()
+        compose.onNodeWithTag("day-list").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
         compose.onNodeWithTag("status").assertIsDisplayed()
     }

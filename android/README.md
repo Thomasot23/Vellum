@@ -64,7 +64,7 @@ continues locally; the server's configured room timezone controls all date and
 time presentation. The JSON endpoint supplies seven local calendar days starting
 today, including overnight events and daylight-saving transitions; e-paper
 rendering retains its original window. The native endpoint caps provider caching
-at fifteen seconds. Day/week navigation returns home after 30 seconds without touch.
+at fifteen seconds. Day/week navigation returns home after 20 seconds without touch.
 Week counts refer to **visible** bookings, respecting the room privacy policy.
 
 The app uses the bundled Inter font under its SIL Open Font License, includes

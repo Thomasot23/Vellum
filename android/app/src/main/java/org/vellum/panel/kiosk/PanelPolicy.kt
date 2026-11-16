@@ -4,7 +4,10 @@ package org.vellum.panel.kiosk
 import java.time.LocalTime
 
 object PanelPolicy {
-    fun returnHome(idleMs: Long): Boolean = idleMs >= 30_000
+    /** Without touch, a day or week view gives way to the home screen after this long. */
+    const val RETURN_HOME_MS = 20_000L
+
+    fun returnHome(idleMs: Long): Boolean = idleMs >= RETURN_HOME_MS
 
     fun brightness(time: LocalTime): Float = if (time.hour in 8..17) 1f else 0.15f
 

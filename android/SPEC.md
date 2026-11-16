@@ -27,7 +27,7 @@ Users:
    lasts, and the next booking, laid out as the **status-panel** or **day-band**
    layout chosen for the content in Vellum.
 3. As someone at the door I can open a day list and a week view by touch and return
-   to the start screen; after 30 s without touch the app returns by itself.
+   to the start screen; after 20 s without touch the app returns by itself.
 4. As someone who wants the room I scan the booking QR code shown on screen.
 5. As an operator I change the design (theme, wordmark, mark) or the layout in the
    console and the panel shows it within one minute, without touching the device.
@@ -148,7 +148,7 @@ unit test that compares both tables.
 - **Server:** vitest for `room-state` and `asset` (auth, ownership, ETag), in the
   existing suite.
 - **On device:** manual check on the APPC-10S against a checklist (enroll, approve,
-  layout switch, design switch, offline, 30 s return, reboot → app starts).
+  layout switch, design switch, offline, 20 s return, reboot → app starts).
 
 ## Boundaries
 

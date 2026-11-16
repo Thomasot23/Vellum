@@ -75,8 +75,8 @@ class DomainTest {
     }
 
     @Test fun idleTimeoutNightDimmingAndPixelShiftAreBounded() {
-        assertFalse(PanelPolicy.returnHome(29999))
-        assertTrue(PanelPolicy.returnHome(30000))
+        assertFalse(PanelPolicy.returnHome(19999))
+        assertTrue(PanelPolicy.returnHome(20000))
         assertEquals(1f, PanelPolicy.brightness(LocalTime.of(12, 0)))
         assertEquals(0.15f, PanelPolicy.brightness(LocalTime.of(23, 0)))
         repeat(1000) { assertTrue(PanelPolicy.pixelOffset(it.toLong()) in -2..2) }
