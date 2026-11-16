@@ -26,6 +26,14 @@
     "noMatch": "No match",
     "noDevicesHint": "Devices appear when they connect.",
     "approve": "Approve",
+    "keyChanged": "Key changed {count}×",
+    "keyChangedHint": "This device presented a different key after first contact (first: {first}). Compare the fingerprint on the device with particular care before approving.",
+    "keyFingerprint": "Key",
+    "noKeyFingerprint": "No key (legacy firmware)",
+    "approveConfirm": "Approve this device?",
+    "approveMessage": "Compare this key fingerprint with the one shown on the device: {fingerprint}. Approve only if both match exactly.",
+    "approveMessageNoKey": "This device registered no key (legacy firmware). Its token cannot be bound to a key. Approve only if you are sure it is your device.",
+    "approveFailed": "Approval failed. If the device's key changed in the meantime, reload and compare the fingerprint again.",
     "delete": "Delete",
     "deleteConfirm": "Delete device?",
     "deleteMessage": "Remove {mac} and all telemetry?",
@@ -215,6 +223,48 @@
         "profile": "from the profile",
         "device": "set on this display"
       }
+    },
+    "platform": {
+      "title": "Platform",
+      "appVersion": "App version",
+      "android": "Android",
+      "patch": "Security patch",
+      "model": "Model",
+      "managed": "Managed (device owner)",
+      "lockTask": "Kiosk lock",
+      "debugging": "Debugging",
+      "network": "Network",
+      "reported": "Reported",
+      "noData": "The panel has not reported its platform yet.",
+      "yes": "Yes",
+      "no": "No",
+      "on": "On",
+      "off": "Off",
+      "unknown": "Unknown",
+      "levels": {
+        "ok": "Platform OK",
+        "warning": "Platform warning",
+        "critical": "Platform critical"
+      },
+      "reasons": {
+        "notDeviceOwner": "Not managed: the app is not device owner, so kiosk and policies cannot be enforced.",
+        "testKeys": "Firmware is signed with test keys.",
+        "nonUserBuild": "Firmware is a debug build, not a release build.",
+        "adbEnabled": "USB/ADB debugging is enabled.",
+        "developerOptions": "Developer options are enabled.",
+        "lockTaskOff": "Kiosk lock is not active.",
+        "patchUnknown": "Security patch level unknown.",
+        "patchOld": "Security patch level is older than 180 days.",
+        "androidOld": "Android is older than version 13.",
+        "stale": "No platform report for over an hour although the panel is polling."
+      },
+      "networkTypes": {
+        "ethernet": "Ethernet",
+        "wifi": "Wi-Fi",
+        "other": "Other",
+        "none": "None"
+      },
+      "note": "Reported by the panel itself. It reveals a weak setup but cannot prove a secure one."
     },
     "statusLight": {
       "label": "Status light token",

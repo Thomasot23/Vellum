@@ -34,6 +34,8 @@ vi.mock("@/db", () => ({
 vi.mock("@/lib/auth", () => ({ validateToken: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   apiLimiter: {},
+  nativeIngressLimiter: {},
+  nativeDeviceLimiter: {},
   getClientIp: () => "local",
   applyRateLimit: vi.fn(() => null),
 }));
@@ -41,11 +43,18 @@ vi.mock("@/lib/content/renderers/room-booking", async (original) => ({
   ...(await original<typeof import("@/lib/content/renderers/room-booking")>()),
   loadRoomModel: vi.fn(),
 }));
+vi.mock("@/lib/panel-info", async (original) => ({
+  ...(await original<typeof import("@/lib/panel-info")>()),
+  writePanelInfo: vi.fn(),
+}));
+vi.mock("@/lib/logger", () => ({ log: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/status-light", async (original) => ({
   ...(await original<typeof import("@/lib/status-light")>()),
   readStatusLightRecord: vi.fn(),
 }));
 import { readStatusLightRecord } from "@/lib/status-light";
+import { writePanelInfo } from "@/lib/panel-info";
+import { log } from "@/lib/logger";
 import { validateToken } from "@/lib/auth";
 import { loadRoomModel } from "@/lib/content/renderers/room-booking";
 import { GET } from "../route";
@@ -85,11 +94,34 @@ const device = {
   displayCaps: { model: "android-panel" },
 };
 const instance = { id, typeSlug: "room-booking", config };
-function request(etag?: string, mac = "AA:BB:CC:DD:EE:FF") {
+function request(etag?: string, mac = "AA:BB:CC:DD:EE:FF", extra: Record<string, string> = {}) {
   return new NextRequest(`http://localhost/api/v1/ink/room-state?mac=${mac}`, {
-    headers: { "x-device-token": "test-token", ...(etag ? { "if-none-match": etag } : {}) },
+    headers: {
+      "x-device-token": "test-token",
+      ...(etag ? { "if-none-match": etag } : {}),
+      ...extra,
+    },
   });
 }
+const panelInfo = {
+  appVersion: "0.2.0",
+  appVersionCode: 2,
+  androidRelease: "13",
+  sdkInt: 33,
+  securityPatch: "2025-10-05",
+  manufacturer: "Vendor",
+  model: "Panel 10",
+  buildType: "user",
+  buildTags: "release-keys",
+  deviceOwner: true,
+  lockTask: true,
+  adbEnabled: false,
+  developerOptions: false,
+  networkType: "ethernet",
+};
+const panelHeader = {
+  "x-panel-info": Buffer.from(JSON.stringify(panelInfo)).toString("base64url"),
+};
 beforeEach(() => {
   vi.clearAllMocks();
   state.rows = [[device], [instance], []];
@@ -99,8 +131,66 @@ beforeEach(() => {
   vi.mocked(validateToken).mockResolvedValue(true);
   vi.mocked(loadRoomModel).mockResolvedValue(model);
   vi.mocked(readStatusLightRecord).mockResolvedValue(null);
+  vi.mocked(writePanelInfo).mockResolvedValue(undefined);
 });
 describe("GET room-state", () => {
+  it("renews source evidence and server time on unchanged content", async () => {
+    const firstTime = new Date("2026-11-12T10:00:00Z");
+    const evidenceModel = {
+      ...model,
+      sourceFetchedAt: firstTime,
+      windowStart: new Date("2026-11-12T00:00:00Z"),
+      windowEnd: new Date("2026-11-19T00:00:00Z"),
+    };
+    vi.mocked(loadRoomModel).mockResolvedValue(evidenceModel);
+    const first = await GET(request());
+    const original = JSON.parse(
+      Buffer.from(first.headers.get("X-Room-Live")!, "base64url").toString()
+    );
+    state.rows = [[device], [instance], []];
+    vi.mocked(loadRoomModel).mockResolvedValue({
+      ...evidenceModel,
+      now: new Date(firstTime.getTime() + 15000),
+      sourceFetchedAt: new Date(firstTime.getTime() + 15000),
+    });
+    const cached = await GET(request(first.headers.get("ETag")!));
+    expect(cached.status).toBe(304);
+    expect(await cached.text()).toBe("");
+    expect(cached.headers.get("X-Room-Server-Time")).toBeTruthy();
+    const renewed = JSON.parse(
+      Buffer.from(cached.headers.get("X-Room-Live")!, "base64url").toString()
+    );
+    expect(renewed.sourceFetchedAt).not.toBe(original.sourceFetchedAt);
+    expect(renewed.validUntil).not.toBe(original.validUntil);
+  });
+
+  it("stores the platform snapshot on full, cached and unassigned answers", async () => {
+    const first = await GET(request(undefined, undefined, panelHeader));
+    expect(writePanelInfo).toHaveBeenLastCalledWith(device.mac, panelInfo, expect.any(Date));
+    state.rows = [[device], [instance], []];
+    const etag = first.headers.get("etag")!;
+    expect((await GET(request(etag, undefined, panelHeader))).status).toBe(304);
+    state.rows = [[{ ...device, contentInstanceId: null }]];
+    expect((await GET(request(undefined, undefined, panelHeader))).status).toBe(204);
+    expect(writePanelInfo).toHaveBeenCalledTimes(3);
+  });
+  it("ignores a missing or unusable snapshot without logging its content", async () => {
+    await GET(request());
+    expect(writePanelInfo).not.toHaveBeenCalled();
+    state.rows = [[device], [instance], []];
+    const response = await GET(request(undefined, undefined, { "x-panel-info": "c2VjcmV0" }));
+    expect(response.status).toBe(200);
+    expect(writePanelInfo).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(log.warn).mock.calls)).not.toContain("c2VjcmV0");
+  });
+  it("still answers when the snapshot cannot be stored, and never for a bad token", async () => {
+    vi.mocked(writePanelInfo).mockRejectedValue(new Error("test write failure"));
+    expect((await GET(request(undefined, undefined, panelHeader))).status).toBe(200);
+    vi.mocked(validateToken).mockResolvedValue(false);
+    vi.mocked(writePanelInfo).mockClear();
+    expect((await GET(request(undefined, undefined, panelHeader))).status).toBe(401);
+    expect(writePanelInfo).not.toHaveBeenCalled();
+  });
   it("names the status-light revision on full, cached and unassigned answers", async () => {
     const header = "x-status-light-revision";
     const first = await GET(request());
@@ -130,7 +220,7 @@ describe("GET room-state", () => {
     expect(new PgDialect().sqlToQuery(state.presenceFilter!).params).toEqual([device.mac]);
     expect(state.presence).toMatchObject({
       lastSeen: expect.any(Date),
-      expectedIntervalS: 60,
+      expectedIntervalS: 15,
       expectedDisplayState: "on",
       expectedDeviceState: "awake",
       expectedWakeAt: null,
@@ -198,7 +288,7 @@ describe("GET room-state", () => {
     state.rows = [[{ ...device, contentInstanceId: null }]];
     expect((await GET(request())).status).toBe(204);
     expect(state.presence.lastSeen).toBeInstanceOf(Date);
-    expect(state.presence.expectedIntervalS).toBe(60);
+    expect(state.presence.expectedIntervalS).toBe(15);
   });
   it("refuses content types that are not rooms", async () => {
     state.rows = [[device], [{ ...instance, typeSlug: "image" }]];

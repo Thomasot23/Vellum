@@ -5,6 +5,8 @@ import { z } from "zod";
 vi.mock("../auth", () => ({ validateToken: vi.fn() }));
 vi.mock("../rate-limit", () => ({
   apiLimiter: {},
+  nativeIngressLimiter: {},
+  nativeDeviceLimiter: {},
   getClientIp: vi.fn(() => "203.0.113.1"),
   applyRateLimit: vi.fn(() => null),
 }));

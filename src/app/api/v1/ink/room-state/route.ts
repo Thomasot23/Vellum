@@ -10,6 +10,7 @@ import { completeDisplayCaps, mergeReportedCaps, resolveDisplayCaps } from "@/li
 import { loadRoomModel } from "@/lib/content/renderers/room-booking";
 import { buildRoomState, matchesEntityTag, roomStateTag } from "@/lib/room-state";
 import { errorResponse } from "@/lib/api-response";
+import { PANEL_INFO_HEADER, parsePanelInfo, writePanelInfo } from "@/lib/panel-info";
 import {
   readStatusLightRecord,
   STATUS_LIGHT_NONE,
@@ -20,14 +21,14 @@ export async function GET(request: NextRequest) {
   const context = await readDeviceRoom(request);
   if (!context.ok) return context.response;
   const { device, settings, instance } = context;
-  // Native panels poll every minute, including unchanged and unassigned states.
+  // Native panels poll about every fifteen seconds, including unchanged and unassigned states.
   await withDbWrite(
     () =>
       db
         .update(devices)
         .set({
           lastSeen: new Date(),
-          expectedIntervalS: 60,
+          expectedIntervalS: 15,
           expectedDisplayState: "on",
           expectedDeviceState: "awake",
           expectedWakeAt: null,
@@ -35,6 +36,19 @@ export async function GET(request: NextRequest) {
         .where(eq(devices.mac, device.mac)),
     "room-state-presence"
   ).catch(() => log.warn("Native panel presence update failed"));
+  // Platform snapshot, only from an authenticated poll and never at the cost of
+  // the answer. The header's content is not logged: it is the panel's word.
+  const panelHeader = request.headers.get(PANEL_INFO_HEADER);
+  if (panelHeader !== null) {
+    const info = parsePanelInfo(panelHeader);
+    if (info) {
+      await writePanelInfo(device.mac, info, new Date()).catch(() =>
+        log.warn("Panel info update failed", { mac: device.mac })
+      );
+    } else {
+      log.warn("Panel info header rejected", { mac: device.mac });
+    }
+  }
   // Names the current status-light secret so the panel knows when to fetch it.
   // Omitted when the lookup fails: "unknown" must not read as "removed".
   const lightRevision = await readStatusLightRecord(device.mac)
@@ -42,6 +56,7 @@ export async function GET(request: NextRequest) {
     .catch(() => null);
   const headers: Record<string, string> = {
     "Cache-Control": "private, no-cache",
+    "X-Room-Server-Time": new Date().toISOString(),
     ...(lightRevision ? { [STATUS_LIGHT_REVISION_HEADER]: lightRevision } : {}),
   };
   if (!instance) return new Response(null, { status: 204, headers });
@@ -62,12 +77,20 @@ export async function GET(request: NextRequest) {
     const model = await loadRoomModel({
       config: instance.config,
       calendarDays: 7,
+      decodeBranding: false,
       now,
       timezone: settings.values.timezone ?? undefined,
     });
-    const state = buildRoomState(model, theme, now);
+    const state = buildRoomState(model, theme, new Date());
     const etag = roomStateTag(state);
-    const cacheHeaders = { ...headers, ETag: etag };
+    const cacheHeaders = {
+      ...headers,
+      ETag: etag,
+      "X-Room-Server-Time": state.serverTime,
+      ...(state.live
+        ? { "X-Room-Live": Buffer.from(JSON.stringify(state.live)).toString("base64url") }
+        : {}),
+    };
     if (matchesEntityTag(request.headers.get("if-none-match"), etag)) {
       return new Response(null, { status: 304, headers: cacheHeaders });
     }

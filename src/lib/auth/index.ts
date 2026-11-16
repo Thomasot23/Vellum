@@ -8,6 +8,7 @@ import { encryptForDevice } from "@/lib/crypto";
 import { constantTimeEqual } from "@/lib/constant-time";
 import { log } from "@/lib/logger";
 import type { DisplayCaps } from "@/lib/display";
+import { recordKeyChange } from "@/lib/key-history";
 
 export interface HelloResponse {
   status: string;
@@ -29,7 +30,10 @@ export interface DeviceRecord {
 export interface DeviceRepository {
   findByMac(mac: string): Promise<DeviceRecord | null>;
   insertPending(mac: string, publicKey: string | null): Promise<void>;
-  updatePublicKey(mac: string, publicKey: string): Promise<void>;
+  /** Atomically writes only while the current row is pending. */
+  updatePublicKey(mac: string, publicKey: string): Promise<boolean>;
+  /** Best-effort record that a pending device replaced its key. */
+  recordKeyChange?(mac: string, previousKey: string): Promise<void>;
   updateDisplayCaps(mac: string, caps: DisplayCaps): Promise<void>;
   updateApproved(mac: string, token: string): Promise<void>;
   updateLastSeen(mac: string): Promise<void>;
@@ -67,11 +71,21 @@ export const drizzleDeviceRepo: DeviceRepository = {
       "auth-insert-pending-device"
     );
   },
+  async recordKeyChange(mac, previousKey) {
+    await recordKeyChange(mac, previousKey, new Date());
+  },
   async updatePublicKey(mac, publicKey) {
-    await withDbWrite(
-      () => db.update(devices).set({ publicKey }).where(eq(devices.mac, mac)),
+    // PostgreSQL rechecks this predicate after a concurrent approval's row lock.
+    const changed = await withDbWrite(
+      () =>
+        db
+          .update(devices)
+          .set({ publicKey })
+          .where(and(eq(devices.mac, mac), eq(devices.status, "pending")))
+          .returning({ mac: devices.mac }),
       "auth-update-public-key"
     );
+    return changed.length === 1;
   },
   async updateDisplayCaps(mac, caps) {
     await withDbWrite(
@@ -177,10 +191,16 @@ export async function handleHello(
   // it. That is what closes the impersonation path — knowing the (non-secret)
   // MAC and substituting your own public key must NOT yield the device token.
   if (!approved) {
-    if (publicKey && publicKey !== device.publicKey) {
-      await repo.updatePublicKey(mac, publicKey);
+    if (device.status === "pending" && publicKey && publicKey !== device.publicKey) {
+      const changed = await repo.updatePublicKey(mac, publicKey);
+      // Do not report a change when approval or deletion won the write race.
+      if (changed && device.publicKey) {
+        await repo
+          .recordKeyChange?.(mac, device.publicKey)
+          .catch(() => log.warn("hello: unable to record key change", { mac }));
+      }
     }
-    return { status: device.status };
+    return { status: device.status === "approved" ? "pending" : device.status };
   }
 
   // Approved: deliver the bearer token ONLY encrypted to the enrolled key.

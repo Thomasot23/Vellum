@@ -287,3 +287,25 @@ describe("failures", () => {
     ).rejects.toThrow("carrier-pigeon");
   });
 });
+
+it("honors a stricter caller TTL and reports the actual fetch time on cache hits", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-25T10:00:00Z"));
+  const seen = vi.fn();
+  const request = {
+    providerId: PROVIDER,
+    roomConfig: ROOM,
+    ...displayWindow("2026-08-25T10:00:00Z"),
+    ttlS: 120,
+    onFetchedAt: seen,
+  };
+  await fetchResourceEvents(request);
+  expect(seen).toHaveBeenLastCalledWith(new Date("2026-08-25T10:00:00Z"));
+  vi.advanceTimersByTime(10_000);
+  await fetchResourceEvents({ ...request, ttlS: 15 });
+  expect(seen).toHaveBeenLastCalledWith(new Date("2026-08-25T10:00:00Z"));
+  vi.advanceTimersByTime(6000);
+  await fetchResourceEvents({ ...request, ttlS: 15 });
+  expect(fetchEvents).toHaveBeenCalledTimes(2);
+  expect(seen).toHaveBeenLastCalledWith(new Date("2026-08-25T10:00:16Z"));
+});

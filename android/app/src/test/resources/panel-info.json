@@ -1,0 +1,16 @@
+{
+  "appVersion": "0.2.0",
+  "appVersionCode": 2,
+  "androidRelease": "13",
+  "sdkInt": 33,
+  "securityPatch": "2025-10-05",
+  "manufacturer": "Vendor",
+  "model": "Panel 10",
+  "buildType": "user",
+  "buildTags": "release-keys",
+  "deviceOwner": true,
+  "lockTask": true,
+  "adbEnabled": false,
+  "developerOptions": false,
+  "networkType": "ethernet"
+}

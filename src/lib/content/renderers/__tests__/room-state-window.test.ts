@@ -16,7 +16,7 @@ it("loads seven local calendar days across daylight saving for native clients", 
     expect.objectContaining({
       windowStart: new Date("2026-10-23T22:00:00Z"),
       windowEnd: new Date("2026-10-30T23:00:00Z"),
-      ttlS: 60,
+      ttlS: 15,
     })
   );
 });

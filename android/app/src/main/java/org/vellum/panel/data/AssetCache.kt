@@ -24,6 +24,7 @@ class AssetCache(
         api: PanelClient,
         identity: DeviceIdentity,
         state: RoomState,
+        revalidate: Boolean = true,
     ): Map<String, File> {
         val binding =
             MessageDigest
@@ -66,6 +67,10 @@ class AssetCache(
                     directory,
                     "$id." + if (metadata?.mime == "image/svg+xml") "svg" else "image",
                 )
+            if (!revalidate && metadata != null && image().exists()) {
+                result[id] = image()
+                continue
+            }
             try {
                 val response =
                     api.asset(

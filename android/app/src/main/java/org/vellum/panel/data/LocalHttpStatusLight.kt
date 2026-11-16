@@ -29,6 +29,7 @@ class LocalHttpStatusLight(
     private val token: () -> String?,
     private val base: HttpUrl = "http://127.0.0.1:3535/".toHttpUrl(),
     private val now: () -> Long = System::currentTimeMillis,
+    private val onFailure: () -> Unit = {},
 ) : StatusLight {
     init {
         // Matches network_security_config.xml, which permits cleartext for this address only.
@@ -75,6 +76,7 @@ class LocalHttpStatusLight(
             return
         }
         shown = null
+        onFailure()
         // A replacement that the service rejects must not freeze the old state:
         // switch off once with the token that still works.
         val previous = confirmed

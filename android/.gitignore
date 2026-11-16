@@ -3,6 +3,10 @@
 local.properties
 *.jks
 *.keystore
+*.p12
+*.pfx
+# Signed releases are distributed through Vellum, never committed.
+/release/
 
 # Source package, distinct from runtime data directories.
 !app/src/main/java/org/vellum/panel/data/

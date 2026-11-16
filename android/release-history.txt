@@ -1,0 +1,2 @@
+# Released versions, appended by scripts/sign-release.sh. Public information only.
+# versionCode versionName sha256-of-apk

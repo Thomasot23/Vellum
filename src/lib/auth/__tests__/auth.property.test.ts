@@ -24,14 +24,17 @@ function createInMemoryRepo(): DeviceRepository & {
   return {
     store,
     async findByMac(mac) {
-      return store.get(mac) ?? null;
+      const row = store.get(mac);
+      return row ? { ...row } : null;
     },
     async insertPending(mac, publicKey) {
       store.set(mac, { mac, status: "pending", token: null, publicKey: publicKey ?? null });
     },
     async updatePublicKey(mac, publicKey) {
       const d = store.get(mac);
-      if (d) d.publicKey = publicKey;
+      if (d?.status !== "pending") return false;
+      d.publicKey = publicKey;
+      return true;
     },
     async updateDisplayCaps() {
       // no-op for tests

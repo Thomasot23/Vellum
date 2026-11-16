@@ -66,6 +66,10 @@ export const loginLimiter = new RateLimiter({ maxRequests: 5, windowMs: 15 * 60_
 /** Rate limiter for authenticated endpoints — more generous */
 export const apiLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60_000 });
 
+/** Native read endpoints: shared-IP ingress plus authenticated device isolation. */
+export const nativeIngressLimiter = new RateLimiter({ maxRequests: 600, windowMs: 60_000 });
+export const nativeDeviceLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60_000 });
+
 /**
  * Extract the client IP used to key rate limits.
  *

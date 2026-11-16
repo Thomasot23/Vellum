@@ -48,6 +48,8 @@ vi.mock("@/lib/firmware", () => ({ getAllManifests: vi.fn(async () => mocks.mani
 vi.mock("@/lib/safe-fetch", () => ({ safeFetch: mocks.safeFetch }));
 vi.mock("@/lib/rate-limit", () => ({
   apiLimiter: {},
+  nativeIngressLimiter: {},
+  nativeDeviceLimiter: {},
   applyRateLimit: vi.fn(() => null),
   getClientIp: vi.fn(() => "test"),
 }));

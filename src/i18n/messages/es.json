@@ -26,6 +26,14 @@
     "noMatch": "Sin resultados",
     "noDevicesHint": "Los dispositivos aparecen tras la primera conexión.",
     "approve": "Aprobar",
+    "keyChanged": "Clave cambiada {count}×",
+    "keyChangedHint": "Este dispositivo presentó otra clave tras el primer contacto (primera: {first}). Compare la huella en el dispositivo con especial cuidado antes de aprobar.",
+    "keyFingerprint": "Clave",
+    "noKeyFingerprint": "Sin clave (firmware antiguo)",
+    "approveConfirm": "¿Aprobar este dispositivo?",
+    "approveMessage": "Compare esta huella de clave con la que muestra el dispositivo: {fingerprint}. Apruebe solo si coinciden exactamente.",
+    "approveMessageNoKey": "Este dispositivo no registró ninguna clave (firmware antiguo). Su token no puede vincularse a una clave. Apruebe solo si está seguro de que es su dispositivo.",
+    "approveFailed": "La aprobación ha fallado. Si la clave del dispositivo cambió entretanto, recargue y vuelva a comparar la huella.",
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar dispositivo?",
     "deleteMessage": "¿Eliminar {mac} y todos los datos de telemetría?",
@@ -215,6 +223,48 @@
         "profile": "del perfil",
         "device": "definido en esta pantalla"
       }
+    },
+    "platform": {
+      "title": "Plataforma",
+      "appVersion": "Versión de la app",
+      "android": "Android",
+      "patch": "Parche de seguridad",
+      "model": "Modelo",
+      "managed": "Gestionado (propietario del dispositivo)",
+      "lockTask": "Bloqueo de quiosco",
+      "debugging": "Depuración",
+      "network": "Red",
+      "reported": "Notificado",
+      "noData": "El panel aún no ha notificado su plataforma.",
+      "yes": "Sí",
+      "no": "No",
+      "on": "Activado",
+      "off": "Desactivado",
+      "unknown": "Desconocido",
+      "levels": {
+        "ok": "Plataforma correcta",
+        "warning": "Aviso de plataforma",
+        "critical": "Plataforma crítica"
+      },
+      "reasons": {
+        "notDeviceOwner": "No gestionado: la app no es propietaria del dispositivo, no se pueden imponer el quiosco ni las directivas.",
+        "testKeys": "El firmware está firmado con claves de prueba.",
+        "nonUserBuild": "El firmware es una compilación de depuración, no de producción.",
+        "adbEnabled": "La depuración USB/ADB está activada.",
+        "developerOptions": "Las opciones de desarrollador están activadas.",
+        "lockTaskOff": "El bloqueo de quiosco no está activo.",
+        "patchUnknown": "Nivel de parche de seguridad desconocido.",
+        "patchOld": "El nivel de parche de seguridad tiene más de 180 días.",
+        "androidOld": "Android es anterior a la versión 13.",
+        "stale": "Más de una hora sin notificación de plataforma aunque el panel consulta."
+      },
+      "networkTypes": {
+        "ethernet": "Ethernet",
+        "wifi": "Wi-Fi",
+        "other": "Otra",
+        "none": "Ninguna"
+      },
+      "note": "Notificado por el propio panel. Revela una configuración débil, pero no demuestra una segura."
     },
     "statusLight": {
       "label": "Token de la luz de estado",

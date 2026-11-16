@@ -189,7 +189,8 @@ export type RoomBookingConfig = z.infer<typeof roomBookingConfigSchema>;
  */
 export async function fetchEvents(
   config: z.infer<typeof roomBookingConfigSchema>,
-  window?: { start: Date; end: Date }
+  window?: { start: Date; end: Date },
+  onFetchedAt?: (at: Date) => void
 ): Promise<CalendarEvent[]> {
   const now = Date.now();
   return fetchResourceEvents({
@@ -198,6 +199,7 @@ export async function fetchEvents(
     windowStart: window?.start ?? new Date(now - 4 * 3600_000),
     windowEnd: window?.end ?? new Date(now + 12 * 3600_000),
     ttlS: config.cacheTtlS,
+    ...(onFetchedAt ? { onFetchedAt } : {}),
   });
 }
 
@@ -955,6 +957,9 @@ export function renderStacked(spec: FrameSpec): Canvas {
  */
 export interface RoomModel {
   config: RoomBookingConfig;
+  sourceFetchedAt?: Date | undefined;
+  windowStart?: Date | undefined;
+  windowEnd?: Date | undefined;
   /** The room's own zone if it names one, else the display's. */
   timezone: string;
   /** The instant the frame depicts. Data, not a clock read. */
@@ -990,7 +995,9 @@ async function loadBrandImage(
   }
 }
 
-export async function loadRoomModel(params: LoadParams & { calendarDays?: 7 }): Promise<RoomModel> {
+export async function loadRoomModel(
+  params: LoadParams & { calendarDays?: 7; decodeBranding?: boolean }
+): Promise<RoomModel> {
   const cfg = roomBookingConfigSchema.parse(params.config);
 
   /* The room's own zone wins when it is set; otherwise the display's zone, from
@@ -1013,12 +1020,20 @@ export async function loadRoomModel(params: LoadParams & { calendarDays?: 7 }): 
   };
 
   let events: CalendarEvent[];
+  let sourceFetchedAt: Date | undefined;
+  let windowStart: Date | undefined;
+  let windowEnd: Date | undefined;
   try {
     const start = startOfDay(new TZDate(params.now, timezone));
+    windowStart = start;
+    windowEnd = addDays(start, params.calendarDays ?? 1);
     events = params.calendarDays
       ? await fetchEvents(
-          { ...cfg, cacheTtlS: Math.min(cfg.cacheTtlS, 60) },
-          { start, end: addDays(start, params.calendarDays) }
+          { ...cfg, cacheTtlS: Math.min(cfg.cacheTtlS, 15) },
+          { start, end: windowEnd },
+          (at) => {
+            sourceFetchedAt = at;
+          }
         )
       : await fetchEvents(cfg);
   } catch (err) {
@@ -1034,13 +1049,17 @@ export async function loadRoomModel(params: LoadParams & { calendarDays?: 7 }): 
     log.warn("Room-booking QR URL resolution failed", { error: String(err) });
   }
 
-  const [brandMark, wordmark] = await Promise.all([
-    loadBrandImage(cfg.brandMarkAssetId, cfg.layout),
-    loadBrandImage(cfg.wordmarkAssetId, cfg.layout),
-  ]);
+  const [brandMark, wordmark] =
+    params.decodeBranding === false
+      ? [null, null]
+      : await Promise.all([
+          loadBrandImage(cfg.brandMarkAssetId, cfg.layout),
+          loadBrandImage(cfg.wordmarkAssetId, cfg.layout),
+        ]);
 
   return {
     ...base,
+    ...(params.calendarDays ? { sourceFetchedAt, windowStart, windowEnd } : {}),
     bookingUrl,
     brandMark,
     wordmark,

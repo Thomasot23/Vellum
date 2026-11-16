@@ -41,6 +41,15 @@ data class RoomReply(
     val room: RoomState?,
     /** Revision of the status-light secret, "none", or null when the server did not say. */
     val lightRevision: String? = null,
+    val serverTime: String? = null,
+    val live: LiveEvidence? = null,
+    val retryAfterSeconds: Long? = null,
+)
+
+@Serializable private data class LogBatchBody(
+    val mac: String,
+    val seq: Long,
+    val lines: String,
 )
 
 @Serializable private data class LightSecretBody(
@@ -131,7 +140,7 @@ class PanelClient(
                 .post(payload.toRequestBody("application/json".toMediaType()))
                 .build()
         return http.newCall(request).execute().use {
-            if (!it.isSuccessful) throw IOException("Enrollment unavailable")
+            if (!it.isSuccessful) throw RetryablePanelFailure(retryAfterSeconds(it.header("Retry-After")))
             val reply =
                 PanelJson.decodeFromString<HelloResponse>(
                     body(it, 64 * 1024).toString(Charsets.UTF_8),
@@ -144,6 +153,7 @@ class PanelClient(
     fun room(
         identity: DeviceIdentity,
         etag: String?,
+        panelInfo: String? = null,
     ): RoomReply {
         val request =
             Request
@@ -151,6 +161,7 @@ class PanelClient(
                 .url(url("/api/v1/ink/room-state", identity.mac))
                 .header("x-device-token", requireNotNull(identity.token))
         if (etag != null) request.header("If-None-Match", etag)
+        if (panelInfo != null) request.header("X-Panel-Info", panelInfo)
         return http.newCall(request.build()).execute().use {
             RoomReply(
                 it.code,
@@ -166,8 +177,36 @@ class PanelClient(
                     null
                 },
                 it.header("X-Status-Light-Revision")?.takeIf(LIGHT_REVISION::matches),
+                it.header("X-Room-Server-Time").takeIf { _ -> it.code == 200 || it.code == 304 },
+                it.header("X-Room-Live")?.takeIf { _ -> it.code == 200 || it.code == 304 }?.let { value ->
+                    require(value.length <= 4096)
+                    PanelJson.decodeFromString<LiveEvidence>(
+                        java.util.Base64
+                            .getUrlDecoder()
+                            .decode(value)
+                            .toString(Charsets.UTF_8),
+                    )
+                },
+                retryAfterSeconds(it.header("Retry-After")),
             )
         }
+    }
+
+    /** Upload one diagnostics batch. True once the server stored it (or had it already). */
+    fun logs(
+        identity: DeviceIdentity,
+        seq: Long,
+        lines: String,
+    ): Boolean {
+        val payload = PanelJson.encodeToString(LogBatchBody(identity.mac, seq, lines))
+        val request =
+            Request
+                .Builder()
+                .url(origin.newBuilder().encodedPath("/api/v1/ink/logs").build())
+                .header("x-device-token", requireNotNull(identity.token))
+                .post(payload.toRequestBody("application/json".toMediaType()))
+                .build()
+        return http.newCall(request).execute().use { it.isSuccessful }
     }
 
     /** The sealed status-light secret. 204 means the server holds none for this panel. */
@@ -223,4 +262,25 @@ class PanelClient(
             )
         }
     }
+}
+
+class RetryablePanelFailure(
+    val retrySeconds: Long?,
+) : IOException("Panel request deferred")
+
+internal fun retryAfterSeconds(value: String?): Long? {
+    if (value == null) return null
+    val seconds =
+        value.toLongOrNull() ?: try {
+            java.time.Duration
+                .between(
+                    java.time.Instant.now(),
+                    java.time.ZonedDateTime
+                        .parse(value, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                        .toInstant(),
+                ).seconds
+        } catch (_: Exception) {
+            return null
+        }
+    return seconds.coerceIn(1, 3600)
 }

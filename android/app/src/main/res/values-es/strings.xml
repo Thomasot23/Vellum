@@ -9,4 +9,5 @@
     <string name="noneLeft">"No hay más reservas hoy"</string>
     <string name="scanHint">"Escanea el código para reservar"</string>
     <string name="clockSuffix">""</string>
+    <string name="state_unknown">Estado desconocido</string>
 </resources>

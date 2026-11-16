@@ -6,12 +6,17 @@ import { devices, contentInstances } from "@/db/schema";
 import { validateToken } from "@/lib/auth";
 import { errorResponse, validateRequest } from "@/lib/api-response";
 import { renderQuerySchema } from "@/lib/validation";
-import { apiLimiter, applyRateLimit, getClientIp } from "@/lib/rate-limit";
+import {
+  nativeIngressLimiter,
+  nativeDeviceLimiter,
+  applyRateLimit,
+  getClientIp,
+} from "@/lib/rate-limit";
 import { settingsForDevice } from "@/lib/settings/for-device";
 
 /** Rate limit, identity and token check, then the device row. Nothing else. */
 export async function readAuthenticatedDevice(request: NextRequest) {
-  const limited = applyRateLimit(apiLimiter, getClientIp(request));
+  const limited = applyRateLimit(nativeIngressLimiter, getClientIp(request));
   if (limited) return { ok: false as const, response: limited };
   const validation = validateRequest(renderQuerySchema, {
     mac: request.nextUrl.searchParams.get("mac"),
@@ -23,6 +28,8 @@ export async function readAuthenticatedDevice(request: NextRequest) {
       response: Response.json(errorResponse("Unauthorized"), { status: 401 }),
     };
   }
+  const perDevice = applyRateLimit(nativeDeviceLimiter, validation.data.mac);
+  if (perDevice) return { ok: false as const, response: perDevice };
   const [device] = await withDbRead(
     () => db.select().from(devices).where(eq(devices.mac, validation.data.mac)).limit(1),
     "device-room-get-device"

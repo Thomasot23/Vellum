@@ -105,3 +105,93 @@ implemented and tested without hardware; T14 and T17 need a physical panel.
 - [ ] **T17 On-device check** (S): extend `../DEVICE_CHECKLIST.md` (free, busy,
       offline, night, reboot; default device key replaced, port 3535 restricted)
       and run it on the panel.
+
+## Phase 6: Operations, stage 1 (T18–T26 done; T27, T28 and live checks open)
+
+Specs: `../SPEC-panel-telemetry.md`, `../SPEC-panel-enrollment-trust.md`,
+`../SPEC-release-signing.md`. Server checks for every server task:
+`pnpm typecheck && pnpm lint && pnpm format:check && pnpm i18n:check && pnpm test:coverage`.
+Android checks for every app task:
+`./gradlew testDebugUnitTest lintDebug ktlintCheck assembleDebug assembleRelease`.
+
+- [x] **T18 Panel-info intake** (S): zod schema and base64url parser for
+      `X-Panel-Info`, latest snapshot in the settings store after token check,
+      removal with the device; `room-state` keeps answering if storage fails.
+      Verify: `pnpm vitest run src/lib/__tests__/panel-info.test.ts src/app/api/v1/ink/room-state`.
+      Files: `src/lib/panel-info.ts`, its test, `room-state/route.ts` + test, `src/app/admin/actions.ts`.
+- [x] **T19 Posture and console card** (M): `assessPanelPosture` with the spec's
+      rules and date boundaries; "Platform" card on the device page and a table
+      badge for android panels; strings in five languages.
+      Verify: posture unit tests; `pnpm build` with CI values.
+      Files: `src/lib/panel-posture.ts` + test, `devices/[mac]/page.tsx`, `detail.tsx`, `device-table.tsx`, `src/i18n/messages/*.json`.
+- [x] **T20 App collection and send policy** (M): `PanelInfo` from public APIs,
+      header on the first poll, on change and every 15 minutes; never fails a poll.
+      Verify: JVM tests with fakes and MockWebServer; instrumentation reports
+      device owner and lock task on the test emulator.
+      Files: `data/PanelInfo.kt`, `data/PanelClient.kt`, `data/PanelRepository.kt`, `MainActivity.kt`, tests.
+- [x] **T21 App log ring and upload** (M): bounded ring of coded entries,
+      redaction rules, upload via `/api/v1/ink/logs` with persisted `seq`, at most
+      every 5 minutes. Verify: JVM tests for bounds, redaction, sequence, retry.
+      Files: `data/PanelLog.kt`, `data/PanelClient.kt`, `data/PanelRepository.kt`, tests.
+
+### Checkpoint 6a
+
+- [ ] Test emulator page shows platform data within one poll; ADB on turns the
+      assessment to warning; logs appear in the diagnostics card; all checks green.
+
+- [x] **T22 Shared key fingerprint** (S): server and Kotlin implementation, shared
+      fixture, shown on the panel's waiting screen.
+      Verify: fixture tests on both sides; Compose test for the waiting screen.
+      Files: `src/lib/key-fingerprint.ts` + test, `enroll/Fingerprint.kt`, `ui/EnrollmentScreen.kt`, fixture.
+- [x] **T23 Key-bound approval** (M): `approveDevice(mac, expectedFingerprint)`
+      in a serializable audited transaction, `key_changed` on mismatch, legacy
+      path without key; confirmation dialog and fingerprint column.
+      Verify: action tests through the library function; manual swap test.
+      Files: `src/lib/auth` or `src/lib/device-approval.ts` + test, `actions.ts`, `device-table.tsx`, i18n.
+- [x] **T24 Key history before approval** (S): first-seen fingerprint and change
+      counter in the settings store from `handleHello`, cleared on approval and
+      deletion; console warning. Verify: unit tests for swap, approval, deletion.
+      Files: `src/lib/auth/index.ts`, `src/lib/key-history.ts` + test, `device-table.tsx`, i18n.
+- [x] **T25 One-time key registration** (S): `POST /api/v1/ink/key` for approved
+      devices without a key; 409 otherwise; audited. App call follows in
+      `panel-provisioning`. Verify: route tests (once, twice, wrong state, no token).
+      Files: `src/app/api/v1/ink/key/route.ts` + test, `src/lib/validation.ts`.
+
+### Checkpoint 6b
+
+- [ ] Panel and console show the same fingerprint; a swapped key fails approval;
+      e-paper enrollment unchanged; all checks green.
+
+- [x] **T26 Signing tooling and version policy** (M): `sign-release.sh`,
+      certificate check, `versionCode` rule, `RELEASING.md`; tested only with a
+      throwaway keystore in a temporary directory.
+      Verify: script test run signs, verifies, rejects a wrong signer and a
+      non-increasing version, prints no password.
+      Files: `scripts/sign-release.sh`, `RELEASING.md`, `app/build.gradle.kts`, `release-certificate.txt` (placeholder).
+- [ ] **T27 Real release key** (S, operator): only after the custody decision;
+      create key, store password in the Keychain, make and test both backups,
+      record the certificate digest.
+- [ ] **T28 Re-provision the test emulator** (S): only after approval; wipe,
+      install a signed build as device owner, verify a signed update installs and
+      a differently signed build is rejected.
+
+### Checkpoint 6c
+
+- [ ] Signed release verified against the recorded certificate; update path on
+      the emulator proven; custody documented.
+
+## Phase 7: local live-display corrections
+
+- [x] **T29 Enrollment race regression:** pending-only atomic key write, result-aware history, invalid-key rejection; focused/full auth regressions.
+- [x] **T30 Boundary labels:** shared neutral fixture, pure formatters and both renderers; day/year/zone/DST integration checks.
+- [x] **T31 Live-state contract:** complete-vs-hidden coverage, source age/expiry, clock headers, privacy and ETag tests.
+- [x] **T32 Native effective status:** local transitions, unknown state, QR/LED consistency and monotonic clock tests.
+- [x] **T33 Refresh behavior:** native 15-second source cache/polls, backoff/Retry-After, asset reuse and rate budgets.
+- [x] **T34 Layout fidelity:** native status-panel/day-band in both orientations, labelled expanded timeline, navigation retained.
+- [ ] **T35 Integrated acceptance:** complete local gates, synthetic screenshots, external review, provisioning proposal and central handoff.
+
+No item above waives existing live, release-key, production-installation or
+emulator-reset approvals.
+
+T34: native implementations and synthetic landscape/portrait captures complete; physical-panel acceptance remains separate.
+T35: local unit/build/UI gates passed; External review response and real PostgreSQL concurrency acceptance remain open. No deployment.

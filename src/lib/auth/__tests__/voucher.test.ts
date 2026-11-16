@@ -8,7 +8,7 @@ function mockRepo(over: Partial<DeviceRepository> = {}): DeviceRepository {
   return {
     findByMac: vi.fn(async () => null),
     insertPending: vi.fn(async () => {}),
-    updatePublicKey: vi.fn(async () => {}),
+    updatePublicKey: vi.fn(async () => true),
     updateDisplayCaps: vi.fn(async () => {}),
     updateApproved: vi.fn(async () => {}),
     updateLastSeen: vi.fn(async () => {}),

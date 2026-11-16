@@ -26,6 +26,14 @@
     "noMatch": "Aucun résultat",
     "noDevicesHint": "Les appareils apparaissent après leur première connexion.",
     "approve": "Approuver",
+    "keyChanged": "Clé modifiée {count}×",
+    "keyChangedHint": "Cet appareil a présenté une autre clé après le premier contact (première : {first}). Comparez l’empreinte sur l’appareil avec un soin particulier avant d’approuver.",
+    "keyFingerprint": "Clé",
+    "noKeyFingerprint": "Aucune clé (ancien micrologiciel)",
+    "approveConfirm": "Approuver cet appareil ?",
+    "approveMessage": "Comparez cette empreinte de clé avec celle affichée sur l’appareil : {fingerprint}. N’approuvez que si les deux correspondent exactement.",
+    "approveMessageNoKey": "Cet appareil n’a enregistré aucune clé (ancien micrologiciel). Son jeton ne peut pas être lié à une clé. N’approuvez que si vous êtes sûr qu’il s’agit de votre appareil.",
+    "approveFailed": "L’approbation a échoué. Si la clé de l’appareil a changé entre-temps, rechargez et comparez à nouveau l’empreinte.",
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer l'appareil ?",
     "deleteMessage": "Supprimer {mac} et toutes les données de télémétrie ?",
@@ -215,6 +223,48 @@
         "profile": "du profil",
         "device": "défini sur cet écran"
       }
+    },
+    "platform": {
+      "title": "Plateforme",
+      "appVersion": "Version de l’app",
+      "android": "Android",
+      "patch": "Correctif de sécurité",
+      "model": "Modèle",
+      "managed": "Géré (propriétaire de l’appareil)",
+      "lockTask": "Verrouillage kiosque",
+      "debugging": "Débogage",
+      "network": "Réseau",
+      "reported": "Signalé",
+      "noData": "Le panneau n’a pas encore signalé sa plateforme.",
+      "yes": "Oui",
+      "no": "Non",
+      "on": "Activé",
+      "off": "Désactivé",
+      "unknown": "Inconnu",
+      "levels": {
+        "ok": "Plateforme OK",
+        "warning": "Avertissement plateforme",
+        "critical": "Plateforme critique"
+      },
+      "reasons": {
+        "notDeviceOwner": "Non géré : l’app n’est pas propriétaire de l’appareil, le kiosque et les règles ne peuvent pas être imposés.",
+        "testKeys": "Le micrologiciel est signé avec des clés de test.",
+        "nonUserBuild": "Le micrologiciel est une version de débogage, pas une version de production.",
+        "adbEnabled": "Le débogage USB/ADB est activé.",
+        "developerOptions": "Les options pour les développeurs sont activées.",
+        "lockTaskOff": "Le verrouillage kiosque n’est pas actif.",
+        "patchUnknown": "Niveau de correctif de sécurité inconnu.",
+        "patchOld": "Le niveau de correctif de sécurité date de plus de 180 jours.",
+        "androidOld": "Android est antérieur à la version 13.",
+        "stale": "Aucun signalement de plateforme depuis plus d’une heure alors que le panneau interroge le serveur."
+      },
+      "networkTypes": {
+        "ethernet": "Ethernet",
+        "wifi": "Wi-Fi",
+        "other": "Autre",
+        "none": "Aucun"
+      },
+      "note": "Signalé par le panneau lui-même. Révèle une configuration faible mais ne prouve pas une configuration sûre."
     },
     "statusLight": {
       "label": "Jeton du voyant d’état",

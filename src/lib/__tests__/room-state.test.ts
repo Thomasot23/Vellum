@@ -82,3 +82,39 @@ describe("room state contract", () => {
     ).toEqual(["a", "b"]);
   });
 });
+
+describe("native live evidence", () => {
+  const metadata = {
+    sourceFetchedAt: now,
+    windowStart: new Date("2026-11-12T00:00:00Z"),
+    windowEnd: new Date("2026-11-19T00:00:00Z"),
+  };
+  it("exports complete coverage with bounded source age", () => {
+    const state = build(metadata);
+    expect(state.live).toMatchObject({
+      completeEvents: true,
+      sourceFetchedAt: now.toISOString(),
+      validUntil: "2026-11-12T10:03:00.000Z",
+    });
+  });
+  it("never discloses hidden transition times and limits hidden status lifetime", () => {
+    const state = build({
+      ...metadata,
+      config: { ...config, policy: "Hide All" },
+      nextEventStart: new Date("2026-11-12T13:17:00Z"),
+    });
+    expect(state.live).toMatchObject({
+      completeEvents: false,
+      validUntil: "2026-11-12T10:00:30.000Z",
+    });
+    expect(state.state.nextEventStart).toBeNull();
+    expect(JSON.stringify(state)).not.toContain("13:17");
+  });
+  it("renews freshness without changing the content ETag", () => {
+    const first = build(metadata);
+    const second = build({ ...metadata, sourceFetchedAt: new Date(now.getTime() + 1000) });
+    expect(first.live).toBeDefined();
+    expect(second.live).not.toEqual(first.live);
+    expect(roomStateTag(second)).toBe(roomStateTag(first));
+  });
+});

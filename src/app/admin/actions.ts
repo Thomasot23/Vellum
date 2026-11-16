@@ -41,6 +41,9 @@ import {
   wifiConfigurationInputSchema,
 } from "@/lib/provisioning/remote-configuration";
 import { unifiedRefreshProfileSchema, upgradeRefreshProfileConfig } from "@/lib/sleep";
+import { deletePanelInfo } from "@/lib/panel-info";
+import { approveDeviceRecord } from "@/lib/device-approval";
+import { deleteKeyHistory } from "@/lib/key-history";
 import {
   deleteStatusLightRecord,
   replaceStatusLightToken,
@@ -54,22 +57,29 @@ async function requireAdmin(permission: Permission) {
 
 /* ── Devices ──────────────────────────────────────────────────── */
 
-export async function approveDevice(mac: string) {
+/**
+ * Approve a pending device for the key whose fingerprint the operator compared.
+ * Fails with `key_changed` when the device's key is not that one any more.
+ */
+export async function approveDevice(mac: string, expectedFingerprint: string | null = null) {
   const actor = await requireAdmin("devices.approve");
   try {
     const token = randomBytes(32).toString("hex");
     await withAuditedTransaction(
       actor,
-      { action: "device.approve", targetType: "device", targetId: mac },
+      (result: { fingerprint: string | null }) => ({
+        action: "device.approve",
+        targetType: "device",
+        targetId: mac,
+        metadata: { fingerprint: result.fingerprint },
+      }),
       async (tx) => {
-        const updated = await tx
-          .update(devices)
-          .set({ status: "approved", token, approvedAt: new Date() })
-          .where(eq(devices.mac, mac))
-          .returning({ mac: devices.mac });
-        if (updated.length === 0) throw new Error("device_not_found");
+        const result = await approveDeviceRecord(tx, mac, expectedFingerprint, token, new Date());
+        await deleteKeyHistory(tx, mac);
+        return result;
       },
-      "approve-device"
+      "approve-device",
+      "serializable"
     );
     revalidatePath("/admin/devices");
   } catch (err) {
@@ -582,8 +592,10 @@ export async function deleteDevice(mac: string) {
           .where(eq(devices.mac, mac))
           .returning({ mac: devices.mac });
         if (deleted.length === 0) throw new Error("device_not_found");
-        // Not tied to the device by a constraint, so it is removed here.
+        // Not tied to the device by a constraint, so they are removed here.
         await deleteStatusLightRecord(tx, mac);
+        await deletePanelInfo(tx, mac);
+        await deleteKeyHistory(tx, mac);
       },
       "delete-device"
     );

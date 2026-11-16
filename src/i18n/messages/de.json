@@ -26,6 +26,14 @@
     "noMatch": "Keine Treffer",
     "noDevicesHint": "Geräte erscheinen nach der ersten Verbindung.",
     "approve": "Genehmigen",
+    "keyChanged": "Schlüssel {count}× geändert",
+    "keyChangedHint": "Dieses Gerät hat nach dem ersten Kontakt einen anderen Schlüssel vorgelegt (zuerst: {first}). Vor der Freigabe den Fingerabdruck am Gerät besonders sorgfältig vergleichen.",
+    "keyFingerprint": "Schlüssel",
+    "noKeyFingerprint": "Kein Schlüssel (alte Firmware)",
+    "approveConfirm": "Dieses Gerät freigeben?",
+    "approveMessage": "Vergleiche diesen Schlüssel-Fingerabdruck mit dem auf dem Gerät angezeigten: {fingerprint}. Nur freigeben, wenn beide genau übereinstimmen.",
+    "approveMessageNoKey": "Dieses Gerät hat keinen Schlüssel registriert (alte Firmware). Sein Token lässt sich an keinen Schlüssel binden. Nur freigeben, wenn sicher ist, dass es dein Gerät ist.",
+    "approveFailed": "Freigabe fehlgeschlagen. Falls sich der Schlüssel des Geräts inzwischen geändert hat, neu laden und den Fingerabdruck erneut vergleichen.",
     "delete": "Löschen",
     "deleteConfirm": "Gerät löschen?",
     "deleteMessage": "{mac} und alle Telemetriedaten entfernen?",
@@ -215,6 +223,48 @@
         "profile": "vom Profil",
         "device": "an diesem Display gesetzt"
       }
+    },
+    "platform": {
+      "title": "Plattform",
+      "appVersion": "App-Version",
+      "android": "Android",
+      "patch": "Sicherheits-Patch",
+      "model": "Modell",
+      "managed": "Verwaltet (Device Owner)",
+      "lockTask": "Kiosk-Sperre",
+      "debugging": "Debugging",
+      "network": "Netzwerk",
+      "reported": "Gemeldet",
+      "noData": "Das Panel hat seine Plattform noch nicht gemeldet.",
+      "yes": "Ja",
+      "no": "Nein",
+      "on": "An",
+      "off": "Aus",
+      "unknown": "Unbekannt",
+      "levels": {
+        "ok": "Plattform in Ordnung",
+        "warning": "Plattform-Warnung",
+        "critical": "Plattform kritisch"
+      },
+      "reasons": {
+        "notDeviceOwner": "Nicht verwaltet: Die App ist nicht Device Owner, Kiosk und Richtlinien lassen sich nicht durchsetzen.",
+        "testKeys": "Die Firmware ist mit Testschlüsseln signiert.",
+        "nonUserBuild": "Die Firmware ist ein Debug-Build, kein Release-Build.",
+        "adbEnabled": "USB-/ADB-Debugging ist eingeschaltet.",
+        "developerOptions": "Die Entwickleroptionen sind eingeschaltet.",
+        "lockTaskOff": "Die Kiosk-Sperre ist nicht aktiv.",
+        "patchUnknown": "Sicherheits-Patchstand unbekannt.",
+        "patchOld": "Der Sicherheits-Patchstand ist älter als 180 Tage.",
+        "androidOld": "Android ist älter als Version 13.",
+        "stale": "Seit über einer Stunde keine Plattformmeldung, obwohl das Panel abfragt."
+      },
+      "networkTypes": {
+        "ethernet": "Ethernet",
+        "wifi": "WLAN",
+        "other": "Sonstiges",
+        "none": "Keins"
+      },
+      "note": "Vom Panel selbst gemeldet. Zeigt eine schwache Einrichtung, beweist aber keine sichere."
     },
     "statusLight": {
       "label": "Token für Statuslicht",

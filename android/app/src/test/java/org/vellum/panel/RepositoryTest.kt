@@ -223,6 +223,162 @@ class RepositoryTest {
         assertEquals("old-secret", repository.statusLightToken())
     }
 
+    @Test fun attachesThePlatformReportAndResendsItOnlyAfterAFailedPoll() {
+        approved()
+        val info =
+            PanelJson.decodeFromString<org.vellum.panel.data.PanelInfo>(
+                javaClass.getResource("/panel-info.json")!!.readText(),
+            )
+        val reporter =
+            org.vellum.panel.data
+                .PanelInfoReporter({ info }, { 0L })
+        val repository =
+            PanelRepository({ PanelClient(it, allowLocalHttpForTest = true) }, store, cache, reporter) { clock }
+        server.enqueue(MockResponse().setResponseCode(503))
+        repository.tick()
+        assertEquals(info.header(), server.takeRequest().getHeader("X-Panel-Info"))
+        server.enqueue(MockResponse().setBody(fixture))
+        repository.tick()
+        assertEquals(info.header(), server.takeRequest().getHeader("X-Panel-Info"))
+        server.enqueue(MockResponse().setResponseCode(304))
+        repository.tick()
+        assertNull(server.takeRequest().getHeader("X-Panel-Info"))
+    }
+
+    @Test fun anchorsServerTimeBeforeResponseDelay() {
+        approved()
+        val elapsed =
+            java.util.concurrent.atomic
+                .AtomicLong(1000L)
+        var status = 200
+        server.dispatcher =
+            object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                    elapsed.addAndGet(10000)
+                    return MockResponse()
+                        .setResponseCode(status)
+                        .setBody(
+                            if (status ==
+                                200
+                            ) {
+                                fixture
+                            } else {
+                                ""
+                            },
+                        ).setHeader("X-Room-Server-Time", clock.toString())
+                }
+            }
+        val delayed =
+            PanelRepository({ PanelClient(it, true) }, store, cache, monotonicMs = { elapsed.get() }, now = { clock })
+        for (response in listOf(200, 304)) {
+            status = response
+            delayed.tick()
+            assertEquals(
+                clock.plusSeconds(10),
+                delayed.snapshot.value.clockAnchor!!
+                    .at(elapsed.get()),
+            )
+        }
+    }
+
+    @Test fun refreshesLiveEvidenceAndMonotonicClockOn304() {
+        approved()
+        var elapsed = 1000L
+        val live =
+            org.vellum.panel.data.LiveEvidence(
+                true,
+                clock.toString(),
+                clock.toString(),
+                clock.plusSeconds(120).toString(),
+                clock.minusSeconds(3600).toString(),
+                clock.plusSeconds(3600).toString(),
+            )
+        val initial =
+            org.vellum.panel.data.PanelJson
+                .decodeFromString<org.vellum.panel.data.RoomState>(
+                    fixture,
+                ).copy(live = live)
+        val fresh = PanelRepository({ PanelClient(it, true) }, store, cache, monotonicMs = { elapsed }, now = { clock })
+        server.enqueue(
+            MockResponse()
+                .setBody(
+                    PanelJson.encodeToString(
+                        org.vellum.panel.data.RoomState
+                            .serializer(),
+                        initial,
+                    ),
+                ).setHeader("ETag", "one")
+                .setHeader("X-Room-Server-Time", clock.toString()),
+        )
+        fresh.tick()
+        assertEquals(
+            clock.plusSeconds(3),
+            fresh.snapshot.value.clockAnchor!!
+                .at(4000),
+        )
+        elapsed += 15_000
+        val renewed =
+            live.copy(
+                sourceFetchedAt = clock.plusSeconds(15).toString(),
+                evaluatedAt = clock.plusSeconds(15).toString(),
+                validUntil = clock.plusSeconds(135).toString(),
+            )
+        val encoded =
+            java.util.Base64.getUrlEncoder().encodeToString(
+                PanelJson
+                    .encodeToString(
+                        org.vellum.panel.data.LiveEvidence
+                            .serializer(),
+                        renewed,
+                    ).toByteArray(),
+            )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(
+                    304,
+                ).setHeader("X-Room-Live", encoded)
+                .setHeader("X-Room-Server-Time", clock.plusSeconds(15).toString()),
+        )
+        fresh.tick()
+        assertEquals(
+            renewed,
+            fresh.snapshot.value.room!!
+                .live,
+        )
+        assertEquals(renewed, cache.value!!.room.live)
+        assertEquals(
+            clock.plusSeconds(16),
+            fresh.snapshot.value.clockAnchor!!
+                .at(elapsed + 1000),
+        )
+    }
+
+    @Test fun respectsRetryAfterAndResetsBackoffAfterRecovery() {
+        approved()
+        server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "120"))
+        repository.tick()
+        assertEquals(120_000L, repository.nextPollMs)
+        server.enqueue(MockResponse().setBody(fixture))
+        repository.tick()
+        assertEquals(15_000L, repository.nextPollMs)
+    }
+
+    @Test fun invalidLiveHeadersOn401DoNotPreventRevocation() {
+        approved()
+        server.enqueue(MockResponse().setBody(fixture))
+        repository.tick()
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(
+                    401,
+                ).setHeader("X-Room-Live", "invalid")
+                .setHeader("X-Room-Server-Time", "invalid"),
+        )
+        repository.tick()
+        assertNull(repository.snapshot.value.room)
+        assertNull(store.load()!!.token)
+    }
+
     @Test fun cachesRoomAndRefreshesContactTimeOn304() {
         approved()
         server.enqueue(MockResponse().setBody(fixture).setHeader("ETag", "W/\"one\""))
@@ -240,6 +396,10 @@ class RepositoryTest {
         repository.tick()
         assertEquals("W/\"one\"", server.takeRequest().getHeader("If-None-Match"))
         assertEquals(clock.toString(), cache.value!!.lastSuccess)
+        assertNull(
+            org.vellum.panel.domain.RoomLogic
+                .liveMoment(repository.snapshot.value, clock),
+        )
     }
 
     @Test fun keepsLastRoomWhenServerFailsAndClearsItOn401() {

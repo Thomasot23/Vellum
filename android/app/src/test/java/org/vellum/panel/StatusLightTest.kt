@@ -60,8 +60,8 @@ class StatusLightTest {
 
     @Test fun goesDarkOnceTheLastAnswerIsStale() {
         val free = active(true)
-        assertEquals(LightSignal.FREE, LightPolicy.signal(free, now.plusSeconds(180), false))
-        assertEquals(LightSignal.OFF, LightPolicy.signal(free, now.plusSeconds(181), false))
+        assertEquals(LightSignal.FREE, LightPolicy.signal(free, now.plusSeconds(29), false))
+        assertEquals(LightSignal.OFF, LightPolicy.signal(free, now.plusSeconds(30), false))
         // Clock jumped back: the age of the state is unknown.
         assertEquals(LightSignal.OFF, LightPolicy.signal(free, now.minusSeconds(1), false))
     }

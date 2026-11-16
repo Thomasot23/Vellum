@@ -45,11 +45,14 @@ export interface EventRequest {
   windowEnd: Date;
   /** Seconds a result stays usable. 120 by default, 0 to bypass. */
   ttlS?: number;
+  /** Actual source observation time, also reported on a cache hit. */
+  onFetchedAt?: ((at: Date) => void) | undefined;
 }
 
 interface CacheEntry {
   events: CalendarEvent[];
   expiresAt: number;
+  fetchedAt: number;
 }
 
 /** Module-level on purpose: the point is that every caller in the process shares it. */
@@ -113,7 +116,8 @@ export async function fetchResourceEvents(req: EventRequest): Promise<CalendarEv
   const key = keyOf(req, window);
 
   const hit = ttlMs > 0 ? cache.get(key) : undefined;
-  if (hit && Date.now() < hit.expiresAt) {
+  if (hit && Date.now() < hit.expiresAt && Date.now() - hit.fetchedAt < ttlMs) {
+    req.onFetchedAt?.(new Date(hit.fetchedAt));
     counters.hits++;
     return clip(hit.events, req);
   }
@@ -124,6 +128,7 @@ export async function fetchResourceEvents(req: EventRequest): Promise<CalendarEv
   if (!impl) throw new Error(`No implementation for provider type: ${provider.type}`);
 
   counters.fetches++;
+  const fetchedAt = Date.now();
   const events = await impl.fetchEvents({
     credentials: provider.credentials,
     roomConfig: req.roomConfig,
@@ -131,7 +136,8 @@ export async function fetchResourceEvents(req: EventRequest): Promise<CalendarEv
     windowEnd: window.end,
   });
 
-  if (ttlMs > 0) cache.set(key, { events, expiresAt: Date.now() + ttlMs });
+  if (ttlMs > 0) cache.set(key, { events, fetchedAt, expiresAt: fetchedAt + ttlMs });
+  req.onFetchedAt?.(new Date(fetchedAt));
   return clip(events, req);
 }
 

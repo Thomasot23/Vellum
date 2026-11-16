@@ -42,8 +42,8 @@ Android Keystore key; app backup and device transfer are excluded. Secrets are
 never logged. TLS verification is always enabled; redirects receive no credentials.
 A deployment using a private CA must provision a trusted system CA on the panel.
 
-Pending enrollment retries every five seconds. An approved panel polls the room
-JSON every 60 seconds, uses ETag revalidation, and caches the last successful
+Pending enrollment retries every ten seconds. An approved panel polls the room
+JSON every fifteen seconds with jitter, uses ETag revalidation, and caches the last successful
 snapshot. A 304 refreshes the contact time. A 401 drops the token and room cache
 and returns to enrollment. A 204 clears a previous room assignment; a 422 explains
 that the assigned content is not a room. Network failures retain the last room
@@ -64,12 +64,12 @@ continues locally; the server's configured room timezone controls all date and
 time presentation. The JSON endpoint supplies seven local calendar days starting
 today, including overnight events and daylight-saving transitions; e-paper
 rendering retains its original window. The native endpoint caps provider caching
-at 60 seconds. Day/week navigation returns home after 30 seconds without touch.
+at fifteen seconds. Day/week navigation returns home after 30 seconds without touch.
 Week counts refer to **visible** bookings, respecting the room privacy policy.
 
 The app uses the bundled Inter font under its SIL Open Font License, includes
 booking QR codes, and tints operator-supplied brand images like the server.
-QR visibility obeys the server response. Core room labels for English, German,
+QR visibility, status and LEDs share the same effective live state. Core room labels for English, German,
 French, Italian and Spanish are checked against the server's string table.
 
 The foreground activity keeps the screen on and hides system bars. Brightness
@@ -81,8 +81,7 @@ in `PanelPolicy`; no additional administrative scheduling API is introduced.
 
 Panels with LED strips can mirror the room state: green while free, red while
 busy. The light is off whenever the panel cannot vouch for the state: before the
-first room arrives, while the calendar provider is unavailable, when the last
-successful poll is older than 180 seconds, and while the screen is dimmed for the
+first room arrives, while the calendar provider is unavailable, when source evidence expires (at most 180 seconds, or 30 seconds for hidden/legacy state), and while the screen is dimmed for the
 night. A panel without LEDs, without the vendor service or without a token simply
 shows no light; the display itself never depends on it. "Night" uses the
 dimming hours below, so a room booked in the evening shows no light. When the app
@@ -148,3 +147,16 @@ and APK publication need separate approval.
 
 See [DEVICE_CHECKLIST.md](DEVICE_CHECKLIST.md) for the remaining hardware
 acceptance and [SOURCES.md](SOURCES.md) for implementation references.
+
+## Live evidence
+
+Room surfaces are composed locally from JSON, including booking start/end
+transitions between polls. E-paper rendering remains on the server. Authenticated
+200/304 responses carry source freshness and server clock evidence; contact time
+alone cannot renew occupancy. The monotonic clock anchor includes request latency
+conservatively. Legacy responses without evidence expire after thirty seconds
+from their server evaluation time. Expired/unavailable state shows unknown, hides
+the booking QR and turns LEDs off. Poll failures back off with Retry-After support;
+brand assets are reused and revalidated every five minutes or after reassignment.
+The day band defaults to 07:00–20:00 and expands for visible events/current time;
+this is not an opening-hours configuration.

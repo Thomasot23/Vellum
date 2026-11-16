@@ -23,6 +23,7 @@ import {
 import { getCurrentPrincipal, hasPermission } from "@/lib/access";
 import { explainDeviceSettings } from "@/lib/settings/for-device";
 import { openStatusLightToken, readStatusLightRecord } from "@/lib/status-light";
+import { readPanelInfo } from "@/lib/panel-info";
 
 export default async function DeviceDetailPage({ params }: { params: Promise<{ mac: string }> }) {
   const { mac } = await params;
@@ -109,6 +110,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ m
   /* Resolved with the workspace defaults included, so the page can name where
      each value comes from instead of leaving an operator to infer it. */
   const effective = await explainDeviceSettings(device);
+  const panelPlatform = await readPanelInfo(device.mac);
   /* Only whether one exists and can be opened. The secret never reaches a page. */
   const statusLightRecord = await readStatusLightRecord(device.mac);
   let statusLight: "none" | "stored" | "unreadable" = "none";
@@ -147,6 +149,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ m
         }))}
         canProvision={hasPermission(principal, "devices.provision")}
         statusLight={statusLight}
+        panelPlatform={panelPlatform}
       />
     </div>
   );

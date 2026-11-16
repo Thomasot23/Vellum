@@ -31,8 +31,18 @@ const roomEventSchema = z.object({
   isPrivate: z.boolean(),
 });
 
+export const liveEvidenceSchema = z.object({
+  completeEvents: z.boolean(),
+  evaluatedAt: z.iso.datetime(),
+  sourceFetchedAt: z.iso.datetime(),
+  validUntil: z.iso.datetime(),
+  windowStart: z.iso.datetime(),
+  windowEnd: z.iso.datetime(),
+});
+
 export const roomStateSchema = z.object({
   version: z.literal(ROOM_STATE_VERSION),
+  live: liveEvidenceSchema.optional(),
   room: z.object({
     name: z.string(),
     subtitle: z.string().nullable(),
@@ -79,8 +89,26 @@ function lines(text: string | undefined): string[] {
 export function buildRoomState(model: RoomModel, theme: Theme, serverTime: Date): RoomState {
   const cfg = model.config;
   const url = model.bookingUrl;
+  const live =
+    model.sourceFetchedAt && model.windowStart && model.windowEnd && !model.offline
+      ? {
+          completeEvents: cfg.policy !== "Hide All",
+          evaluatedAt: model.now.toISOString(),
+          sourceFetchedAt: model.sourceFetchedAt.toISOString(),
+          validUntil: new Date(
+            Math.min(
+              model.sourceFetchedAt.getTime() + 180_000,
+              model.windowEnd.getTime(),
+              cfg.policy === "Hide All" ? model.now.getTime() + 30_000 : Infinity
+            )
+          ).toISOString(),
+          windowStart: model.windowStart.toISOString(),
+          windowEnd: model.windowEnd.toISOString(),
+        }
+      : undefined;
   return {
     version: ROOM_STATE_VERSION,
+    ...(live ? { live } : {}),
     room: { name: cfg.roomName, subtitle: cfg.roomSubtitle?.trim() || null },
     locale: cfg.locale,
     timezone: model.timezone,
@@ -89,7 +117,8 @@ export function buildRoomState(model: RoomModel, theme: Theme, serverTime: Date)
     state: {
       isRoomFree: model.isRoomFree,
       providerUnavailable: model.offline,
-      nextEventStart: model.nextEventStart?.toISOString() ?? null,
+      nextEventStart:
+        cfg.policy === "Hide All" ? null : (model.nextEventStart?.toISOString() ?? null),
     },
     events: [...model.events]
       .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
@@ -122,7 +151,19 @@ export function buildRoomState(model: RoomModel, theme: Theme, serverTime: Date)
  * nothing new is answered with 304 and costs the panel no redraw.
  */
 export function roomStateTag(state: RoomState): string {
-  const { serverTime: _ignored, ...stable } = state;
+  const { serverTime: _ignored, live, ...content } = state;
+  const stable = {
+    ...content,
+    ...(live
+      ? {
+          live: {
+            completeEvents: live.completeEvents,
+            windowStart: live.windowStart,
+            windowEnd: live.windowEnd,
+          },
+        }
+      : {}),
+  };
   void _ignored;
   const digest = createHash("sha256").update(JSON.stringify(stable)).digest("hex").slice(0, 16);
   return `W/"rs-${digest}"`;

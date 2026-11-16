@@ -29,6 +29,46 @@ import {
   PlugZap,
 } from "lucide-react";
 import { useDeviceLiveUpdates, type LiveDeviceRow } from "./use-device-live-updates";
+import { parseStoredPanelInfo } from "@/lib/panel-info-schema";
+import { assessPanelPosture } from "@/lib/panel-posture";
+import { parseKeyHistory } from "@/lib/key-history-schema";
+
+/** A pending device whose key changed before approval: compare with extra care. */
+function KeyChangedBadge({ value }: { value: unknown }) {
+  const t = useTranslations("devices");
+  const history = parseKeyHistory(value);
+  if (!history) return null;
+  return (
+    <span title={t("keyChangedHint", { first: history.firstFingerprint ?? "—" })}>
+      <StatusPill tone="orange" dot>
+        {t("keyChanged", { count: history.changes })}
+      </StatusPill>
+    </span>
+  );
+}
+
+/** Only for panels that reported, and only when something needs attention. */
+function PanelPostureBadge({
+  device,
+}: {
+  device: { panel_info?: unknown; last_seen: string | null };
+}) {
+  const t = useTranslations("devices");
+  const platform = parseStoredPanelInfo(device.panel_info);
+  if (!platform) return null;
+  const posture = assessPanelPosture(
+    platform.info,
+    platform.receivedAt,
+    device.last_seen ? new Date(device.last_seen) : null,
+    new Date()
+  );
+  if (posture.level === "ok") return null;
+  return (
+    <StatusPill tone={posture.level === "critical" ? "red" : "orange"} dot>
+      {t(`platform.levels.${posture.level}`)}
+    </StatusPill>
+  );
+}
 
 interface Device {
   mac: string;
@@ -59,6 +99,9 @@ interface Device {
   secure_boot_enabled: boolean | null;
   flash_encryption_enabled: boolean | null;
   firmware_version: string | null;
+  panel_info?: unknown;
+  key_fingerprint?: string | null;
+  key_history?: unknown;
 }
 
 interface FirmwareVersion {
@@ -100,6 +143,9 @@ export function DeviceTable({
   };
   const [pending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [approving, setApproving] = useState<{ mac: string; fingerprint: string | null } | null>(
+    null
+  );
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [batteryMac, setBatteryMac] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -283,6 +329,15 @@ export function DeviceTable({
                     <StatusPill tone={connectivityTone(connState)} dot>
                       {connLabel}
                     </StatusPill>
+                    <PanelPostureBadge device={d} />
+                    {d.status === "pending" && <KeyChangedBadge value={d.key_history} />}
+                    {d.status === "pending" && (
+                      <span className="font-mono text-xs text-label-secondary">
+                        {d.key_fingerprint
+                          ? `${t("keyFingerprint")}: ${d.key_fingerprint}`
+                          : t("noKeyFingerprint")}
+                      </span>
+                    )}
                     <span className="text-xs text-label-secondary">{model}</span>
                     {caps?.width && (
                       <span className="text-xs text-label-tertiary">
@@ -381,7 +436,9 @@ export function DeviceTable({
                   {d.status === "pending" && (
                     <Button
                       size="sm"
-                      onClick={() => act(() => approveDevice(d.mac), t("approved"), t("failed"))}
+                      onClick={() =>
+                        setApproving({ mac: d.mac, fingerprint: d.key_fingerprint ?? null })
+                      }
                     >
                       {t("approve")}
                     </Button>
@@ -548,6 +605,24 @@ export function DeviceTable({
       )}
 
       {/* Modals — now self-styled in Aurora. */}
+      {approving && (
+        <ConfirmDialog
+          open={!!approving}
+          title={t("approveConfirm")}
+          message={
+            approving.fingerprint
+              ? t("approveMessage", { fingerprint: approving.fingerprint })
+              : t("approveMessageNoKey")
+          }
+          confirmLabel={t("approve")}
+          onConfirm={() => {
+            const { mac, fingerprint } = approving;
+            act(() => approveDevice(mac, fingerprint), t("approved"), t("approveFailed"));
+            setApproving(null);
+          }}
+          onClose={() => setApproving(null)}
+        />
+      )}
       {deleting && (
         <ConfirmDialog
           open={!!deleting}

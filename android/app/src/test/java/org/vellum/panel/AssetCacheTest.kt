@@ -54,6 +54,15 @@ class AssetCacheTest {
         assertTrue(cache.sync(client, identity, room).isEmpty())
     }
 
+    @Test fun reusesUnchangedAssetsBetweenPeriodicChecksAndPrunesReassignment() {
+        server.enqueue(MockResponse().setHeader("Content-Type", "image/svg+xml").setBody("<svg/>"))
+        val file = cache.sync(client, identity, room).getValue(id)
+        assertEquals(file, cache.sync(client, identity, room, revalidate = false).getValue(id))
+        assertEquals(1, server.requestCount)
+        assertTrue(cache.sync(client, identity, fixture, revalidate = false).isEmpty())
+        assertFalse(file.exists())
+    }
+
     @Test fun refusesPathTraversalAssetIdentifiers() {
         val bad = room.copy(brand = room.brand.copy(markAssetId = "../../other"))
         assertTrue(cache.sync(client, identity, bad).isEmpty())

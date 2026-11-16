@@ -9,4 +9,5 @@
     <string name="noneLeft">"Heute keine weiteren Buchungen"</string>
     <string name="scanHint">"Code mit dem Handy scannen"</string>
     <string name="clockSuffix">" Uhr"</string>
+    <string name="state_unknown">Status unbekannt</string>
 </resources>

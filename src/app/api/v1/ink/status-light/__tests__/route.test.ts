@@ -14,6 +14,8 @@ vi.mock("@/db", () => ({
 vi.mock("@/lib/auth", () => ({ validateToken: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   apiLimiter: {},
+  nativeIngressLimiter: {},
+  nativeDeviceLimiter: {},
   getClientIp: () => "local",
   applyRateLimit: vi.fn(() => null),
 }));

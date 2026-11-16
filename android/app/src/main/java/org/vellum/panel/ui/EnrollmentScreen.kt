@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import org.vellum.panel.data.Snapshot
 import org.vellum.panel.data.Stage
@@ -23,6 +24,7 @@ import org.vellum.panel.data.Stage
 fun EnrollmentScreen(
     snapshot: Snapshot,
     error: String?,
+    fingerprint: String?,
     onConfigure: (String) -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -55,6 +57,14 @@ fun EnrollmentScreen(
                     },
                 )
                 snapshot.mac?.let { Text("Device ID: $it") }
+                if (snapshot.stage == Stage.PENDING && fingerprint != null) {
+                    Text("Compare this key fingerprint with the one shown in Vellum before approving:")
+                    Text(
+                        fingerprint,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
                 Button(onClick = onRetry) { Text("Retry") }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

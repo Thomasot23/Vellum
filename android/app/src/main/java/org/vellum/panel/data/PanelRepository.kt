@@ -21,7 +21,23 @@ data class Snapshot(
     val lastSuccess: Instant? = null,
     val offlineSince: Instant? = null,
     val mac: String? = null,
+    val clockAnchor: ClockAnchor? = null,
 )
+
+/** Server UTC advanced only with elapsed time; never affected by wall-clock edits. */
+data class ClockAnchor(
+    val serverTime: Instant,
+    val elapsedMs: Long,
+) {
+    fun at(elapsedNow: Long): Instant? =
+        if (elapsedNow >=
+            elapsedMs
+        ) {
+            serverTime.plusMillis(elapsedNow - elapsedMs)
+        } else {
+            null
+        }
+}
 
 @Serializable data class CachedRoom(
     val server: String,
@@ -63,9 +79,15 @@ class PanelRepository(
     private val client: (String) -> PanelClient,
     private val identities: IdentityStore,
     private val cache: CacheStore,
+    private val panelInfo: PanelInfoReporter? = null,
+    private val log: PanelLog? = null,
+    private val monotonicMs: () -> Long = { System.nanoTime() / 1_000_000 },
     private val now: () -> Instant = Instant::now,
 ) {
     private var etag: String? = null
+    private var failures = 0
+    var nextPollMs: Long = 15_000
+        private set
 
     /** Read by the status light every few seconds, so kept here instead of reloaded. */
     @Volatile private var lightToken: String? = null
@@ -128,8 +150,11 @@ class PanelRepository(
                     "pending"
                 ) {
                     mutable.value = Snapshot(Stage.PENDING, mac = identity.mac)
+                    failures = 0
+                    nextPollMs = 10_000
                     return
                 }
+                if (hello.status != "approved") log?.warn("ENROLL_UNEXPECTED_STATUS")
                 require(hello.status == "approved")
                 val key = Base64.getDecoder().decode(identity.privateKey)
                 val token =
@@ -141,13 +166,29 @@ class PanelRepository(
                 identity = identity.copy(token = token)
                 identities.save(identity)
             }
-            val reply = api.room(identity, etag)
+            val report = panelInfo?.next()
+            val requestStarted = monotonicMs()
+            val reply = api.room(identity, etag, report?.header)
+            val anchor =
+                reply.serverTime?.let { ClockAnchor(Instant.parse(it), requestStarted) } ?: mutable.value.clockAnchor
             if (reply.status in setOf(200, 204, 304)) {
+                failures = 0
+                nextPollMs = 15_000
+                report?.let { panelInfo?.delivered(it) }
                 identity = syncStatusLight(api, identity, reply.lightRevision)
             }
             when (reply.status) {
                 200 -> {
-                    val room = requireNotNull(reply.room)
+                    val room =
+                        requireNotNull(reply.room).let {
+                            if (reply.live !=
+                                null
+                            ) {
+                                it.copy(live = reply.live).validated()
+                            } else {
+                                it
+                            }
+                        }
                     val time = now()
                     cache.save(
                         CachedRoom(
@@ -159,11 +200,20 @@ class PanelRepository(
                         ),
                     )
                     etag = reply.etag
-                    mutable.value = Snapshot(Stage.ACTIVE, room, time, mac = identity.mac)
+                    mutable.value = Snapshot(Stage.ACTIVE, room, time, mac = identity.mac, clockAnchor = anchor)
                 }
                 304 -> {
                     val current = mutable.value
-                    val room = current.room
+                    val room =
+                        current.room?.let {
+                            if (reply.live !=
+                                null
+                            ) {
+                                it.copy(live = reply.live).validated()
+                            } else {
+                                it
+                            }
+                        }
                     if (room == null) {
                         etag = null
                         throw IllegalStateException("No cached room")
@@ -172,18 +222,28 @@ class PanelRepository(
                     cache.save(
                         CachedRoom(identity.server, identity.mac, etag, time.toString(), room),
                     )
-                    mutable.value = current.copy(lastSuccess = time, offlineSince = null)
+                    mutable.value =
+                        current.copy(room = room, lastSuccess = time, offlineSince = null, clockAnchor = anchor)
                 }
                 401 -> {
+                    log?.warn("TOKEN_REJECTED")
                     identities.save(identity.copy(token = null, lightToken = null, lightRevision = null))
                     lightToken = null
                     clearRoom(Stage.PENDING, identity.mac)
                 }
                 204 -> clearRoom(Stage.UNASSIGNED, identity.mac)
                 422 -> clearRoom(Stage.UNSUPPORTED, identity.mac)
-                else -> throw IllegalStateException("Room request failed")
+                else -> {
+                    log?.warn("ROOM_HTTP", reply.status.toString())
+                    throw RetryablePanelFailure(reply.retryAfterSeconds)
+                }
             }
-        } catch (_: Exception) {
+            if (identity.token != null && reply.status != 401) uploadLogs(api, identity)
+        } catch (failure: Exception) {
+            failures = (failures + 1).coerceAtMost(6)
+            val backoff = (15_000L * (1L shl (failures - 1))).coerceAtMost(300_000)
+            nextPollMs = maxOf(backoff, ((failure as? RetryablePanelFailure)?.retrySeconds ?: 0) * 1000)
+            if (failure !is RoomHttpFailure) log?.warn("ROOM_POLL_FAILED", failure.javaClass.simpleName)
             val previous = mutable.value
             mutable.value =
                 previous.copy(
@@ -237,15 +297,34 @@ class PanelRepository(
                                 }
                             identity.copy(lightToken = token, lightRevision = reply.revision)
                         }
-                        else -> return identity
+                        else -> {
+                            log?.warn("LIGHT_SECRET_HTTP", reply.status.toString())
+                            return identity
+                        }
                     }
                 }
             identities.save(updated)
             lightToken = updated.lightToken
             updated
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            log?.warn("LIGHT_SECRET_FAILED", failure.javaClass.simpleName)
             identity
         }
+    }
+
+    /** Never fatal and never repeated within a poll; the batch waits for the next one. */
+    private fun uploadLogs(
+        api: PanelClient,
+        identity: DeviceIdentity,
+    ) {
+        val batch = log?.nextBatch() ?: return
+        val stored =
+            try {
+                api.logs(identity, batch.seq, batch.lines)
+            } catch (_: Exception) {
+                false
+            }
+        log.attempted(batch, stored)
     }
 
     private fun clearRoom(
@@ -257,3 +336,6 @@ class PanelRepository(
         mutable.value = Snapshot(stage, mac = mac)
     }
 }
+
+/** An unexpected HTTP status, already logged with its code. */
+private class RoomHttpFailure : Exception("Room request failed")

@@ -17,7 +17,10 @@ export const macSchema = z
 
 export const helloRequestSchema = z.object({
   mac: macSchema,
-  publicKey: z.string().min(1).optional(),
+  publicKey: z
+    .string()
+    .regex(/^[A-Za-z0-9+/]{43}=$/, "Invalid X25519 public key")
+    .optional(),
   display: z
     .preprocess((raw) => {
       // Native clients may enroll by registry model; legacy firmware keeps its schema.

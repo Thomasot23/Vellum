@@ -27,6 +27,7 @@
  * so the 800x480 panels and the 1872x1404 one share proportions.
  */
 
+import { formatRoomBoundary } from "./room-boundary-labels";
 import { createCanvas, type Canvas, type Image, type SKRSContext2D } from "@napi-rs/canvas";
 import { format } from "date-fns";
 import { TZDate } from "@date-fns/tz";
@@ -271,10 +272,20 @@ function drawQr(
 }
 
 /** "until 11:30", or the end of the list, or nothing when the booking is hidden. */
-function stateLine(mo: Moment, busy: boolean, text: StatusText, tz: string): string {
+function stateLine(
+  mo: Moment,
+  busy: boolean,
+  text: StatusText,
+  tz: string,
+  now: Date,
+  locale: string
+): string {
   if (busy)
-    return mo.current ? `${text.until} ${clock(mo.current.endTime, tz)}${text.clockSuffix}` : "";
-  if (mo.next) return `${text.until} ${clock(mo.next.startTime, tz)}${text.clockSuffix}`;
+    return mo.current
+      ? `${text.until} ${formatRoomBoundary(mo.current.endTime, now, tz, locale, text.clockSuffix)}`
+      : "";
+  if (mo.next)
+    return `${text.until} ${formatRoomBoundary(mo.next.startTime, now, tz, locale, text.clockSuffix)}`;
   return text.noneLeft;
 }
 
@@ -352,7 +363,7 @@ export function renderStatusPanel(spec: StatusFrameSpec): Canvas {
   say(p, word, px, y, wordSize, "bold", ink);
 
   const lineSize = 17 * u;
-  const line = stateLine(mo, busy, text, tz);
+  const line = stateLine(mo, busy, text, tz, spec.now, locale);
   if (line) {
     const lineFit = fitSize(p, line, pw, lineSize, 10 * u, "normal");
     /* Clear the descenders of the state word ("g" in "Belegt") before the line. */
@@ -367,7 +378,7 @@ export function renderStatusPanel(spec: StatusFrameSpec): Canvas {
       ctx.fillStyle = ink;
       ctx.fillRect(px, y, pw, Math.max(1, Math.round(u)));
       y += 15 * u;
-      const head = `${text.next} · ${clock(featured.startTime, tz)}${text.clockSuffix}`;
+      const head = `${text.next} · ${formatRoomBoundary(featured.startTime, spec.now, tz, locale, text.clockSuffix)}`;
       say(p, head, px, y, 11 * u, "bold", ink, "left", pw);
       y += 2 * u;
     }
@@ -570,7 +581,7 @@ export function renderDayBand(spec: StatusFrameSpec): Canvas {
   outlineIfFaint(p, chipGround, T, m, chipTop, chipW, chipH);
   say(p, word, m + 12 * u, chipTop + chipH / 2 + wordSize * 0.36, wordSize, "bold", chipInk);
 
-  const line = stateLine(mo, busy, text, tz);
+  const line = stateLine(mo, busy, text, tz, spec.now, locale);
   const lineSize = 16 * u;
   const besideX = m + chipW + 14 * u;
   let sy = chipTop + chipH;
@@ -598,7 +609,7 @@ export function renderDayBand(spec: StatusFrameSpec): Canvas {
     const tw = textR - m;
     const head = busy
       ? featured.displaySubject
-      : `${text.next} · ${clock(featured.startTime, tz)}${text.clockSuffix}: ${featured.displaySubject}`;
+      : `${text.next} · ${formatRoomBoundary(featured.startTime, spec.now, tz, locale, text.clockSuffix)}: ${featured.displaySubject}`;
     sy += 22 * u;
     say(p, clip(p, head, 13 * u, "bold", tw), m, sy, 13 * u, "bold", T.footerText);
     if (featured.organizer) {

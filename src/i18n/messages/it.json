@@ -26,6 +26,14 @@
     "noMatch": "Nessun risultato",
     "noDevicesHint": "I dispositivi appaiono dopo la prima connessione.",
     "approve": "Approva",
+    "keyChanged": "Chiave cambiata {count}×",
+    "keyChangedHint": "Questo dispositivo ha presentato un’altra chiave dopo il primo contatto (prima: {first}). Confronta l’impronta sul dispositivo con particolare attenzione prima di approvare.",
+    "keyFingerprint": "Chiave",
+    "noKeyFingerprint": "Nessuna chiave (firmware vecchio)",
+    "approveConfirm": "Approvare questo dispositivo?",
+    "approveMessage": "Confronta questa impronta della chiave con quella mostrata sul dispositivo: {fingerprint}. Approva solo se coincidono esattamente.",
+    "approveMessageNoKey": "Questo dispositivo non ha registrato alcuna chiave (firmware vecchio). Il suo token non può essere legato a una chiave. Approva solo se sei sicuro che sia il tuo dispositivo.",
+    "approveFailed": "Approvazione non riuscita. Se nel frattempo la chiave del dispositivo è cambiata, ricarica e confronta di nuovo l’impronta.",
     "delete": "Elimina",
     "deleteConfirm": "Eliminare il dispositivo?",
     "deleteMessage": "Rimuovere {mac} e tutti i dati di telemetria?",
@@ -215,6 +223,48 @@
         "profile": "dal profilo",
         "device": "impostato su questo display"
       }
+    },
+    "platform": {
+      "title": "Piattaforma",
+      "appVersion": "Versione dell’app",
+      "android": "Android",
+      "patch": "Patch di sicurezza",
+      "model": "Modello",
+      "managed": "Gestito (proprietario del dispositivo)",
+      "lockTask": "Blocco kiosk",
+      "debugging": "Debug",
+      "network": "Rete",
+      "reported": "Segnalato",
+      "noData": "Il pannello non ha ancora segnalato la sua piattaforma.",
+      "yes": "Sì",
+      "no": "No",
+      "on": "Attivo",
+      "off": "Disattivo",
+      "unknown": "Sconosciuto",
+      "levels": {
+        "ok": "Piattaforma OK",
+        "warning": "Avviso piattaforma",
+        "critical": "Piattaforma critica"
+      },
+      "reasons": {
+        "notDeviceOwner": "Non gestito: l’app non è proprietaria del dispositivo, kiosk e criteri non possono essere imposti.",
+        "testKeys": "Il firmware è firmato con chiavi di test.",
+        "nonUserBuild": "Il firmware è una build di debug, non di produzione.",
+        "adbEnabled": "Il debug USB/ADB è attivo.",
+        "developerOptions": "Le opzioni sviluppatore sono attive.",
+        "lockTaskOff": "Il blocco kiosk non è attivo.",
+        "patchUnknown": "Livello della patch di sicurezza sconosciuto.",
+        "patchOld": "Il livello della patch di sicurezza è più vecchio di 180 giorni.",
+        "androidOld": "Android è precedente alla versione 13.",
+        "stale": "Nessuna segnalazione della piattaforma da oltre un’ora anche se il pannello interroga."
+      },
+      "networkTypes": {
+        "ethernet": "Ethernet",
+        "wifi": "Wi-Fi",
+        "other": "Altro",
+        "none": "Nessuna"
+      },
+      "note": "Segnalato dal pannello stesso. Rivela una configurazione debole ma non ne dimostra una sicura."
     },
     "statusLight": {
       "label": "Token della luce di stato",

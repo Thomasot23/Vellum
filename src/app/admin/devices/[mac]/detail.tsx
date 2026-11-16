@@ -24,6 +24,8 @@ import { deviceConnectivity } from "@/lib/connectivity";
 import { fmtInterval } from "@/lib/duration";
 import { deviceName } from "@/lib/device-name";
 import { assessSecurityPosture } from "@/lib/security-posture";
+import type { PanelInfo } from "@/lib/panel-info-schema";
+import { assessPanelPosture } from "@/lib/panel-posture";
 
 /**
  * Four columns were missing from this type, and that is why the view never
@@ -126,6 +128,7 @@ interface Props {
   otaEvents: OtaEvent[];
   canProvision: boolean;
   statusLight: "none" | "stored" | "unreadable";
+  panelPlatform: { info: PanelInfo; receivedAt: Date } | null;
 }
 
 /**
@@ -145,6 +148,86 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       </h3>
       {children}
     </UiCard>
+  );
+}
+
+/** What a native panel says about its own platform, judged by `assessPanelPosture`. */
+function PlatformCard({
+  platform,
+  lastSeen,
+}: {
+  platform: { info: PanelInfo; receivedAt: Date } | null;
+  lastSeen: Date | null;
+}) {
+  const t = useTranslations("devices");
+  const locale = useLocale();
+  if (!platform) {
+    return (
+      <Card title={t("platform.title")}>
+        <p className="text-sm text-label-tertiary">{t("platform.noData")}</p>
+      </Card>
+    );
+  }
+  const { info, receivedAt } = platform;
+  const posture = assessPanelPosture(
+    info,
+    new Date(receivedAt),
+    lastSeen ? new Date(lastSeen) : null,
+    new Date()
+  );
+  const tone = { ok: "green", warning: "orange", critical: "red" } as const;
+  const onOff = (value: boolean) => t(value ? "platform.on" : "platform.off");
+  return (
+    <Card title={t("platform.title")}>
+      <div className="mb-3">
+        <StatusPill tone={tone[posture.level]} dot>
+          {t(`platform.levels.${posture.level}`)}
+        </StatusPill>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <Stat
+          label={t("platform.appVersion")}
+          value={`${info.appVersion} (${info.appVersionCode})`}
+        />
+        <Stat
+          label={t("platform.android")}
+          value={`${info.androidRelease} (API ${info.sdkInt})`}
+          warn={posture.reasons.includes("androidOld")}
+        />
+        <Stat
+          label={t("platform.patch")}
+          value={info.securityPatch ?? t("platform.unknown")}
+          warn={posture.reasons.some((r) => r === "patchOld" || r === "patchUnknown")}
+        />
+        <Stat label={t("platform.model")} value={`${info.manufacturer} ${info.model}`} />
+        <Stat
+          label={t("platform.managed")}
+          value={t(info.deviceOwner ? "platform.yes" : "platform.no")}
+          warn={!info.deviceOwner}
+        />
+        <Stat label={t("platform.lockTask")} value={onOff(info.lockTask)} warn={!info.lockTask} />
+        <Stat
+          label={t("platform.debugging")}
+          value={onOff(info.adbEnabled || info.developerOptions)}
+          warn={info.adbEnabled || info.developerOptions}
+        />
+        <Stat
+          label={t("platform.network")}
+          value={t(`platform.networkTypes.${info.networkType}`)}
+        />
+      </div>
+      {posture.reasons.length > 0 && (
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-label">
+          {posture.reasons.map((reason) => (
+            <li key={reason}>{t(`platform.reasons.${reason}`)}</li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-label-secondary">
+        {t("platform.reported")}: {new Date(receivedAt).toLocaleString(locale)} ·{" "}
+        {t("platform.note")}
+      </p>
+    </Card>
   );
 }
 
@@ -171,6 +254,7 @@ export function DeviceDetail({
   otaEvents,
   canProvision,
   statusLight,
+  panelPlatform,
 }: Props) {
   const statusLightConfigured = statusLight !== "none";
   const t = useTranslations("devices");
@@ -644,6 +728,10 @@ export function DeviceDetail({
       </div>
 
       <div className="mb-6">
+        {reportedModel === "android-panel" && (
+          <PlatformCard platform={panelPlatform} lastSeen={device.lastSeen} />
+        )}
+
         <Card title={t("security.title")}>
           <p className="mb-4 text-sm text-label-secondary">{t("security.description")}</p>
           <div className="grid gap-3 md:grid-cols-3">

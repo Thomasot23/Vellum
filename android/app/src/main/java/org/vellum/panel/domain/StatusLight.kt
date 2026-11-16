@@ -2,7 +2,6 @@
 package org.vellum.panel.domain
 
 import org.vellum.panel.data.Snapshot
-import org.vellum.panel.data.Stage
 import java.time.Duration
 import java.time.Instant
 
@@ -33,16 +32,8 @@ object LightPolicy {
         now: Instant,
         dimmed: Boolean,
     ): LightSignal {
-        val room = snapshot.room
-        val last = snapshot.lastSuccess
-        if (snapshot.stage != Stage.ACTIVE || room == null || last == null || dimmed) {
-            return LightSignal.OFF
-        }
-        if (room.state.providerUnavailable) return LightSignal.OFF
-        val age = Duration.between(last, now)
-        // A negative age means the wall clock jumped back: the age is unknown.
-        if (age.isNegative || age > staleAfter) return LightSignal.OFF
-        val moment = RoomLogic.moment(room.events, now, room.state.isRoomFree)
+        if (dimmed) return LightSignal.OFF
+        val moment = RoomLogic.liveMoment(snapshot, now) ?: return LightSignal.OFF
         return if (moment.busy) LightSignal.BUSY else LightSignal.FREE
     }
 }

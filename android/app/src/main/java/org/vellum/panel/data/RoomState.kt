@@ -24,6 +24,7 @@ data class RoomState(
     val brand: Brand,
     val booking: Booking,
     val serverTime: String,
+    val live: LiveEvidence? = null,
 ) {
     fun validated(): RoomState =
         apply {
@@ -31,6 +32,14 @@ data class RoomState(
             java.time.ZoneId.of(timezone)
             java.time.Instant.parse(serverTime)
             state.nextEventStart?.let(java.time.Instant::parse)
+            live?.let {
+                val start = java.time.Instant.parse(it.windowStart)
+                val end = java.time.Instant.parse(it.windowEnd)
+                require(start < end)
+                java.time.Instant.parse(it.evaluatedAt)
+                java.time.Instant.parse(it.sourceFetchedAt)
+                java.time.Instant.parse(it.validUntil)
+            }
             require(layout in setOf("timeline", "stacked", "status-panel", "day-band"))
             val colors =
                 listOf(
@@ -99,4 +108,14 @@ data class RoomState(
     val slotText: String,
     val slotSecondary: String,
     val footerText: String,
+)
+
+@Serializable
+data class LiveEvidence(
+    val completeEvents: Boolean,
+    val evaluatedAt: String,
+    val sourceFetchedAt: String,
+    val validUntil: String,
+    val windowStart: String,
+    val windowEnd: String,
 )
