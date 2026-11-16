@@ -10,4 +10,8 @@
     <string name="scanHint">"Scan the code to book"</string>
     <string name="clockSuffix">""</string>
     <string name="state_unknown">Status unknown</string>
+    <string name="week">Week</string>
+    <string name="back">Back</string>
+    <string name="minutes_left">%1$d min left</string>
+    <string name="from">from</string>
 </resources>

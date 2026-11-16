@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,7 +31,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
@@ -56,12 +59,14 @@ import org.vellum.panel.R
 import org.vellum.panel.data.RoomEvent
 import org.vellum.panel.data.RoomState
 import org.vellum.panel.data.Snapshot
+import org.vellum.panel.domain.Palette
 import org.vellum.panel.domain.RoomLogic
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 private fun color(hex: String) = Color(android.graphics.Color.parseColor(hex))
@@ -110,6 +115,7 @@ fun RoomScreen(
     val resources = roomResources(state)
     var view by rememberSaveable { mutableStateOf("home") }
     var selectedDay by rememberSaveable { mutableIntStateOf(0) }
+    var cameFromWeek by rememberSaveable { mutableStateOf(false) }
     var activity by remember { mutableIntStateOf(0) }
     LaunchedEffect(view, activity) {
         if (view !=
@@ -134,37 +140,25 @@ fun RoomScreen(
         ) {
             if (view != "home") {
                 Row(
-                    Modifier.fillMaxWidth().background(color(state.theme.headerBg)).padding(20.dp),
+                    Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 24.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Label(
-                            state.room.name,
-                            36,
-                            color(state.theme.headerText),
-                            bold = true,
-                            lines = 1,
-                        )
-                        state.room.subtitle?.let { Label(it, 20, color(state.theme.headerText)) }
+                        Label(state.room.name, 36, color(state.theme.footerText), bold = true, lines = 1)
+                        state.room.subtitle?.let { Label(it, 18, color(state.theme.slotSecondary), lines = 1) }
                     }
-                    state.brand.wordmarkAssetId?.let { id ->
-                        BrandImage(
-                            assets[id],
-                            color(state.theme.headerText),
-                            Modifier.size(180.dp, 58.dp),
-                        )
+                    PanelButton(
+                        resources.getString(R.string.back),
+                        state.theme.eventBg,
+                        RoomLogic.readableOn(state.theme.eventBg, state.theme.slotText),
+                        1f,
+                        Modifier.testTag("nav-back"),
+                    ) {
+                        view = if (view == "day" && cameFromWeek) "week" else "home"
+                        cameFromWeek = false
+                        activity++
                     }
-                    Spacer(Modifier.width(20.dp))
-                    Label(
-                        DateTimeFormatter
-                            .ofPattern(
-                                "HH:mm",
-                            ).withZone(ZoneId.of(state.timezone))
-                            .format(now),
-                        36,
-                        color(state.theme.headerText),
-                        lines = 1,
-                    )
                 }
             }
             if (snapshot.offlineSince != null) {
@@ -180,16 +174,15 @@ fun RoomScreen(
                     ) +
                         time(snapshot.offlineSince.toString(), state),
                     20,
-                    Color.White,
+                    color(RoomLogic.readableOn(state.theme.footerText, state.theme.background)),
                     Modifier
                         .fillMaxWidth()
-                        .background(
-                            Color(0xffa34000),
-                        ).padding(8.dp)
+                        .background(color(state.theme.footerText))
+                        .padding(horizontal = 28.dp, vertical = 8.dp)
                         .testTag("offline"),
                 )
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(if (view == "home") 0.dp else 20.dp)) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(if (view == "home") 0.dp else 28.dp)) {
                 val wide = maxWidth > maxHeight
                 when (view) {
                     "week" ->
@@ -209,35 +202,27 @@ fun RoomScreen(
                                         .background(
                                             color(state.theme.headerBg).copy(alpha = .08f),
                                         ).clickable {
-                                            selectedDay =
-                                                offset
-                                            ; view = "day"
+                                            selectedDay = offset
+                                            cameFromWeek = true
+                                            view = "day"
                                         }.padding(16.dp)
                                         .testTag("week-day-$offset"),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Label(
                                         day.format(
-                                            DateTimeFormatter.ofPattern(
-                                                "EEE dd MMM",
-                                                Locale.forLanguageTag(state.locale),
-                                            ),
+                                            DateTimeFormatter
+                                                .ofLocalizedDate(FormatStyle.FULL)
+                                                .withLocale(Locale.forLanguageTag(state.locale)),
                                         ),
                                         26,
                                         color(state.theme.footerText),
                                         bold = true,
                                     )
                                     Label(
-                                        "${RoomLogic.eventsOn(state, day).size} " +
-                                            if (state.locale ==
-                                                "de"
-                                            ) {
-                                                "sichtbare Termine"
-                                            } else {
-                                                "visible bookings"
-                                            },
+                                        bookingCount(RoomLogic.eventsOn(state, day).size, state.locale),
                                         22,
-                                        color(state.theme.footerText),
+                                        color(state.theme.slotSecondary),
                                     )
                                 }
                             }
@@ -246,48 +231,21 @@ fun RoomScreen(
                         Events(
                             state,
                             RoomLogic.eventsOn(state, today.plusDays(selectedDay.toLong())),
-                            today.plusDays(selectedDay.toLong()).toString(),
+                            today
+                                .plusDays(selectedDay.toLong())
+                                .format(
+                                    DateTimeFormatter
+                                        .ofLocalizedDate(FormatStyle.FULL)
+                                        .withLocale(Locale.forLanguageTag(state.locale)),
+                                ),
+                            now,
                             Modifier.fillMaxSize().testTag("day-list"),
                         )
-                    else -> NativeHome(snapshot, now, assets, Modifier.fillMaxSize())
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                for ((id, en, de) in listOf(
-                    Triple("home", "Home", "Start"),
-                    Triple("day", "Day", "Tag"),
-                    Triple("week", "Week", "Woche"),
-                )) {
-                    TextButton(onClick = {
-                        view = id
-                        selectedDay = 0
-                        activity++
-                    }) {
-                        Label(
-                            if (state.locale ==
-                                "de"
-                            ) {
-                                de
-                            } else {
-                                en
-                            },
-                            20,
-                            color(state.theme.footerText),
-                            lines = 1,
-                        )
-                    }
-                }
-                snapshot.lastSuccess?.let {
-                    Label(
-                        resources.getString(R.string.updated) + " " + time(it.toString(), state),
-                        16,
-                        color(state.theme.footerText),
-                        Modifier.padding(12.dp),
-                        lines = 1,
-                    )
+                    else ->
+                        NativeHome(snapshot, now, assets, Modifier.fillMaxSize()) {
+                            view = "week"
+                            activity++
+                        }
                 }
             }
         }
@@ -299,6 +257,7 @@ internal fun Events(
     state: RoomState,
     events: List<RoomEvent>,
     heading: String,
+    now: Instant,
     modifier: Modifier,
 ) {
     val foreground = color(state.theme.footerText)
@@ -321,8 +280,9 @@ internal fun Events(
             )
         }
         events.forEach {
-            Column(Modifier.fillMaxWidth().background(color(state.theme.eventBg)).padding(16.dp)) {
-                val text = color(RoomLogic.readableOn(state.theme.eventBg, state.theme.slotText))
+            val fill = Palette.band(state.theme, Palette.phase(it, now))
+            Column(Modifier.fillMaxWidth().background(color(fill.ground)).padding(16.dp)) {
+                val text = color(fill.ink)
                 Label("${time(it.start, state)} – ${time(it.end, state)}", 20, text)
                 Label(it.subject, 26, text, bold = true)
                 if (it.organizer.isNotBlank()) Label(it.organizer, 18, text)
@@ -416,4 +376,46 @@ internal fun roomResources(state: RoomState): android.content.res.Resources {
             setLocale(Locale.forLanguageTag(state.locale))
         }
     return context.createConfigurationContext(configuration).resources
+}
+
+/** "No bookings", "1 booking", "3 bookings": only what the privacy policy lets through. */
+internal fun bookingCount(
+    count: Int,
+    locale: String,
+): String =
+    if (locale.startsWith("de")) {
+        when (count) {
+            0 -> "keine sichtbaren Termine"
+            1 -> "1 sichtbarer Termin"
+            else -> "$count sichtbare Termine"
+        }
+    } else {
+        when (count) {
+            0 -> "no visible bookings"
+            1 -> "1 visible booking"
+            else -> "$count visible bookings"
+        }
+    }
+
+/** One large touch target, as the design's only kind of control. */
+@Composable
+internal fun PanelButton(
+    text: String,
+    ground: String,
+    ink: String,
+    scale: Float,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .height((64 * scale).dp)
+            .clip(RoundedCornerShape((5 * scale).dp))
+            .background(color(ground))
+            .clickable(onClick = onClick)
+            .padding(horizontal = (28 * scale).dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(text, (22 * scale).toInt(), color(ink), bold = true, lines = 1)
+    }
 }

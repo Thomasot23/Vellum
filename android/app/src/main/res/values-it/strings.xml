@@ -10,4 +10,8 @@
     <string name="scanHint">"Scansiona il codice per prenotare"</string>
     <string name="clockSuffix">""</string>
     <string name="state_unknown">Stato sconosciuto</string>
+    <string name="week">Settimana</string>
+    <string name="back">Indietro</string>
+    <string name="minutes_left">ancora %1$d min</string>
+    <string name="from">dalle</string>
 </resources>

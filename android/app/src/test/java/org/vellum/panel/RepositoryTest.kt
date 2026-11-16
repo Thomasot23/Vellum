@@ -379,6 +379,22 @@ class RepositoryTest {
         assertNull(store.load()!!.token)
     }
 
+    @Test fun cutsTheWaitShortOnNetworkReturnOnlyWhenTheServerWasUnreachable() {
+        approved()
+        assertFalse(repository.shouldPollOnNetworkReturn())
+        server.enqueue(MockResponse().setResponseCode(503).setHeader("Retry-After", "120"))
+        repository.tick()
+        assertFalse(repository.shouldPollOnNetworkReturn())
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START))
+        repository.tick()
+        assertTrue(repository.shouldPollOnNetworkReturn())
+        assertTrue(repository.nextPollMs >= 30_000)
+        server.enqueue(MockResponse().setBody(fixture))
+        repository.tick()
+        assertFalse(repository.shouldPollOnNetworkReturn())
+        assertEquals(Stage.ACTIVE, repository.snapshot.value.stage)
+    }
+
     @Test fun cachesRoomAndRefreshesContactTimeOn304() {
         approved()
         server.enqueue(MockResponse().setBody(fixture).setHeader("ETag", "W/\"one\""))

@@ -10,4 +10,8 @@
     <string name="scanHint">"Code mit dem Handy scannen"</string>
     <string name="clockSuffix">" Uhr"</string>
     <string name="state_unknown">Status unbekannt</string>
+    <string name="week">Woche</string>
+    <string name="back">Zurück</string>
+    <string name="minutes_left">noch %1$d Min.</string>
+    <string name="from">ab</string>
 </resources>

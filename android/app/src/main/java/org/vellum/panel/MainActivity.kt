@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 package org.vellum.panel
 
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,12 +21,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.vellum.panel.data.AssetCache
 import org.vellum.panel.data.FileRoomCache
 import org.vellum.panel.data.FileSequenceStore
@@ -54,6 +58,15 @@ class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private var polling: Job? = null
+
+    /** Conflated: several network events while waiting still mean one early poll. */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+    private val networkReturned =
+        object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                if (::repository.isInitialized && repository.shouldPollOnNetworkReturn()) wake.trySend(Unit)
+            }
+        }
     private var signalling: Job? = null
     private var light: StatusLight = NoStatusLight
     private lateinit var panelLog: PanelLog
@@ -175,9 +188,13 @@ class MainActivity : ComponentActivity() {
             scope.launch {
                 while (isActive) {
                     mutex.withLock { tick() }
-                    delay(repository.nextPollMs + kotlin.random.Random.nextLong(0, 1001))
+                    // A returning network ends the wait early; see networkReturned.
+                    withTimeoutOrNull(repository.nextPollMs + kotlin.random.Random.nextLong(0, 1001)) {
+                        wake.receive()
+                    }
                 }
             }
+        getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(networkReturned)
         signalling =
             scope.launch {
                 while (isActive) {
@@ -204,6 +221,11 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         signalling?.cancel()
         polling?.cancel()
+        try {
+            getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkReturned)
+        } catch (_: IllegalArgumentException) {
+            // Never registered: storage was unavailable at start.
+        }
         // Nothing keeps the state current once the activity stops, so the LEDs
         // must not keep claiming it. Own thread: onDestroy may cancel the scope.
         val stopping = light

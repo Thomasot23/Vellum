@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.vellum.panel.R
@@ -30,6 +31,7 @@ import org.vellum.panel.data.RoomState
 import org.vellum.panel.data.Snapshot
 import org.vellum.panel.domain.BoundaryLabels
 import org.vellum.panel.domain.Moment
+import org.vellum.panel.domain.Palette
 import org.vellum.panel.domain.RoomLogic
 import java.io.File
 import java.time.Instant
@@ -54,6 +56,7 @@ internal fun NativeHome(
     now: Instant,
     assets: Map<String, File>,
     modifier: Modifier,
+    onWeek: () -> Unit = {},
 ) {
     val state = snapshot.room ?: return
     val moment = RoomLogic.liveMoment(snapshot, now)
@@ -61,7 +64,7 @@ internal fun NativeHome(
         val wide = maxWidth > maxHeight
         val u = min(maxWidth.value, maxHeight.value) / 480f
         if (state.layout == "day-band") {
-            NativeBand(snapshot, now, assets, moment, u, wide)
+            NativeBand(snapshot, now, assets, moment, u, wide, onWeek)
         } else if (wide) {
             Row(Modifier.fillMaxSize()) {
                 StatusGround(snapshot, now, assets, moment, u, Modifier.weight(.4f).fillMaxHeight())
@@ -70,7 +73,14 @@ internal fun NativeHome(
                     Spacer(Modifier.height((35 * u).dp))
                     TodayAgenda(state, now, u, Modifier.weight(1f).fillMaxWidth())
                     Spacer(Modifier.height((12 * u).dp))
-                    BookingCode(snapshot, now)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Box(Modifier.weight(1f)) { BookingCode(snapshot, now) }
+                        WeekButton(state, u, onWeek)
+                    }
                 }
             }
         } else {
@@ -80,7 +90,14 @@ internal fun NativeHome(
                     RoomHeading(state, now, snapshot, u)
                     Spacer(Modifier.height((14 * u).dp))
                     TodayAgenda(state, now, u, Modifier.weight(1f).fillMaxWidth())
-                    BookingCode(snapshot, now)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Box(Modifier.weight(1f)) { BookingCode(snapshot, now) }
+                        WeekButton(state, u, onWeek)
+                    }
                 }
             }
         }
@@ -259,18 +276,69 @@ private fun StatusWords(
     )
     if (moment != null) {
         val boundary = if (moment.busy) moment.current?.end else moment.next?.start ?: state.state.nextEventStart
-        boundary?.let {
-            val text =
-                resources.getString(R.string.until) + " " +
-                    BoundaryLabels.format(
-                        Instant.parse(it),
-                        now,
-                        state.timezone,
-                        state.locale,
-                        resources.getString(R.string.clockSuffix),
-                    )
+        val soonNext = moment.next?.takeIf { moment.soon }
+        if (soonNext != null) {
+            // About to be taken: the countdown matters more than the clock time.
             Spacer(Modifier.height((8 * u).dp))
-            Label(text, size(if (large) 17f else 15f, u), tint, lines = 3)
+            Label(
+                resources.getString(R.string.minutes_left, Palette.minutesLeft(Instant.parse(soonNext.start), now)),
+                size(if (large) 17f else 15f, u),
+                tint,
+                Modifier.testTag("soon"),
+            )
+            if (large) {
+                Spacer(Modifier.height((12 * u).dp))
+                Box(Modifier.width((150 * u).dp).height(1.dp).background(tint))
+                Spacer(Modifier.height((8 * u).dp))
+                Label(
+                    resources.getString(R.string.from) + " " + time(soonNext.start, state) +
+                        resources.getString(R.string.clockSuffix),
+                    size(12f, u),
+                    tint,
+                    bold = true,
+                )
+                Label(soonNext.subject, size(12f, u), tint, lines = 2)
+            }
+        } else {
+            boundary?.let {
+                val text =
+                    resources.getString(R.string.until) + " " +
+                        BoundaryLabels.format(
+                            Instant.parse(it),
+                            now,
+                            state.timezone,
+                            state.locale,
+                            resources.getString(R.string.clockSuffix),
+                        )
+                Spacer(Modifier.height((8 * u).dp))
+                Label(text, size(if (large) 17f else 15f, u), tint, lines = 3)
+            }
+        }
+        val running = moment.current?.takeIf { moment.busy && large }
+        if (running != null) {
+            Spacer(Modifier.height((10 * u).dp))
+            Label(running.subject, size(14f, u), tint, bold = true, lines = 2)
+            Spacer(Modifier.height((10 * u).dp))
+            Box(
+                Modifier
+                    .width((150 * u).dp)
+                    .height((4 * u).dp)
+                    .background(tint.copy(alpha = .25f)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(Palette.progress(running, now))
+                        .background(ink(state.theme.freeBadge))
+                        .testTag("busy-progress"),
+                )
+            }
+            Spacer(Modifier.height((5 * u).dp))
+            Label(
+                resources.getString(R.string.minutes_left, Palette.minutesLeft(Instant.parse(running.end), now)),
+                size(10f, u),
+                tint,
+            )
         }
     }
 }
@@ -300,41 +368,55 @@ private fun TodayAgenda(
             )
         }
         events.forEach { event ->
-            Box(Modifier.fillMaxWidth().height(1.dp).background(ink(state.theme.slotSecondary)))
+            val phase = Palette.phase(event, now)
+            val row = Palette.agenda(state.theme, phase)
+            if (phase != Palette.Phase.NOW) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(
+                            1.dp,
+                        ).background(ink(Palette.blend(state.theme.slotSecondary, state.theme.background, .35f))),
+                )
+            }
             Row(
-                Modifier.fillMaxWidth().padding(vertical = (9 * u).dp),
-                horizontalArrangement =
-                    Arrangement.spacedBy(
-                        (
-                            8 *
-                                u
-                        ).dp,
-                    ),
+                Modifier
+                    .fillMaxWidth()
+                    .then(if (row.ground != null) Modifier.background(ink(row.ground)) else Modifier)
+                    .padding(vertical = (9 * u).dp, horizontal = (if (row.ground != null) 8 * u else 0f).dp)
+                    .testTag("agenda-" + phase.name.lowercase()),
+                horizontalArrangement = Arrangement.spacedBy((8 * u).dp),
             ) {
                 Label(
                     time(event.start, state) + " – " + time(event.end, state),
                     size(10f, u),
-                    ink(state.theme.slotSecondary),
-                    Modifier.width(
-                        (
-                            82 *
-                                u
-                        ).dp,
-                    ),
+                    ink(row.secondary),
+                    Modifier.width((82 * u).dp),
                 )
                 Column(Modifier.weight(1f)) {
-                    Label(event.subject, size(13f, u), ink(state.theme.footerText), bold = true)
-                    if (event.organizer.isNotBlank()) {
-                        Label(
-                            event.organizer,
-                            size(10f, u),
-                            ink(state.theme.slotSecondary),
-                        )
-                    }
+                    Label(event.subject, size(13f, u), ink(row.primary), bold = true)
+                    if (event.organizer.isNotBlank()) Label(event.organizer, size(10f, u), ink(row.secondary))
                 }
             }
         }
     }
+}
+
+/** The way into the week view; the design has no persistent menu. */
+@Composable
+private fun WeekButton(
+    state: RoomState,
+    u: Float,
+    onWeek: () -> Unit,
+) {
+    PanelButton(
+        roomResources(state).getString(R.string.week),
+        Palette.blend(state.theme.eventBg, state.theme.background, .2f),
+        state.theme.footerText,
+        u * .6f,
+        Modifier.testTag("nav-week"),
+        onWeek,
+    )
 }
 
 @Composable
@@ -345,6 +427,7 @@ private fun NativeBand(
     moment: Moment?,
     u: Float,
     wide: Boolean,
+    onWeek: () -> Unit,
 ) {
     val state = snapshot.room ?: return
     BoxWithConstraints(Modifier.fillMaxSize().padding((27 * u).dp)) {
@@ -401,10 +484,23 @@ private fun NativeBand(
             }
             val featured = if (moment?.busy == true) moment.current else moment?.next
             featured?.let {
+                val resources = roomResources(state)
+                val note =
+                    when {
+                        moment?.busy == true ->
+                            " · " +
+                                resources.getString(
+                                    R.string.minutes_left,
+                                    Palette.minutesLeft(Instant.parse(it.end), now),
+                                )
+                        else -> ""
+                    }
                 Spacer(Modifier.height((10 * u).dp))
-                Label(it.subject, size(14f, u), ink(state.theme.footerText), bold = true)
+                Label(it.subject + note, size(14f, u), ink(state.theme.footerText), bold = true, lines = 1)
                 if (it.organizer.isNotBlank()) Label(it.organizer, size(11f, u), ink(state.theme.slotSecondary))
             }
+            Spacer(Modifier.height((12 * u).dp))
+            WeekButton(state, u, onWeek)
         }
         Box(Modifier.align(Alignment.BottomEnd).padding(bottom = (105 * u).dp)) { BookingCode(snapshot, now) }
         Timeline(state, now, u, Modifier.fillMaxWidth().height((85 * u).dp).align(Alignment.BottomCenter))
@@ -452,33 +548,44 @@ private fun Timeline(
         events.forEach {
             val left = ((minute(Instant.parse(it.event.start)) - from) / span).coerceIn(0f, 1f)
             val right = ((minute(Instant.parse(it.event.end)) - from) / span).coerceIn(0f, 1f)
-            val bg = if (Instant.parse(it.event.end) <= now) state.theme.freeBadge else state.theme.eventBg
-            val tint = ink(RoomLogic.readableOn(bg, state.theme.slotText))
-            Column(
+            val phase = Palette.phase(it.event, now)
+            val fill = Palette.band(state.theme, phase)
+            val tint = ink(fill.ink)
+            Box(
                 Modifier
                     .offset(x = maxWidth * left, y = bandHeight / lanes * it.lane)
-                    .width(
-                        (
-                            maxWidth *
-                                (right - left) -
-                                2.dp
-                        ).coerceAtLeast(1.dp),
-                    ).height(bandHeight / lanes)
-                    .background(ink(bg))
-                    .padding((3 * u).dp),
+                    .width((maxWidth * (right - left) - 2.dp).coerceAtLeast(1.dp))
+                    .height(bandHeight / lanes)
+                    .background(ink(fill.ground))
+                    .testTag("band-" + phase.name.lowercase()),
             ) {
-                if (bandHeight / lanes >=
-                    (14 * u).dp
-                ) {
-                    Label(time(it.event.start, state), size(8f, u), tint, bold = true, lines = 1)
+                Column(Modifier.padding((3 * u).dp)) {
+                    if (bandHeight / lanes >= (14 * u).dp) {
+                        Label(time(it.event.start, state), size(8f, u), tint, bold = true, lines = 1)
+                    }
+                    if (bandHeight / lanes >= (28 * u).dp) Label(it.event.subject, size(8f, u), tint, lines = 1)
                 }
-                if (bandHeight / lanes >= (28 * u).dp) Label(it.event.subject, size(8f, u), tint, lines = 1)
+                fill.accentEdge?.let { edge ->
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height((4 * u).dp)
+                            .background(ink(edge)),
+                    )
+                }
             }
         }
         Canvas(Modifier.fillMaxSize()) {
             val bottom = bandHeight.toPx()
             val x = ((minute(now) - from) / span).coerceIn(0f, 1f) * size.width
-            drawLine(ink(state.theme.footerText), Offset(x, -5 * u), Offset(x, bottom + 5 * u), 2.dp.toPx())
+            val marker = ink(state.theme.footerText)
+            drawLine(marker, Offset(x, -5 * u), Offset(x, bottom + 5 * u), 2.dp.toPx())
+            // The accent says "now"; the dark ring keeps it visible on any accent.
+            val radius = 5 * u
+            val centre = Offset(x, -5 * u - radius)
+            drawCircle(ink(state.theme.freeBadge), radius, centre)
+            drawCircle(marker, radius, centre, style = Stroke(2.dp.toPx()))
         }
         for (hour in 0..24) {
             if (hour * 60f < from || hour * 60f > to || hour % 2 != 0) continue

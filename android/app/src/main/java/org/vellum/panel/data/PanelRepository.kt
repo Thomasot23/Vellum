@@ -86,6 +86,9 @@ class PanelRepository(
 ) {
     private var etag: String? = null
     private var failures = 0
+
+    /** The last poll failed without any answer from the server (no route, DNS, timeout). */
+    @Volatile private var unreachable = false
     var nextPollMs: Long = 15_000
         private set
 
@@ -151,6 +154,8 @@ class PanelRepository(
                 ) {
                     mutable.value = Snapshot(Stage.PENDING, mac = identity.mac)
                     failures = 0
+                    unreachable = false
+                    unreachable = false
                     nextPollMs = 10_000
                     return
                 }
@@ -173,6 +178,7 @@ class PanelRepository(
                 reply.serverTime?.let { ClockAnchor(Instant.parse(it), requestStarted) } ?: mutable.value.clockAnchor
             if (reply.status in setOf(200, 204, 304)) {
                 failures = 0
+                unreachable = false
                 nextPollMs = 15_000
                 report?.let { panelInfo?.delivered(it) }
                 identity = syncStatusLight(api, identity, reply.lightRevision)
@@ -241,6 +247,7 @@ class PanelRepository(
             if (identity.token != null && reply.status != 401) uploadLogs(api, identity)
         } catch (failure: Exception) {
             failures = (failures + 1).coerceAtMost(6)
+            unreachable = failure is java.io.IOException && failure !is RetryablePanelFailure
             val backoff = (15_000L * (1L shl (failures - 1))).coerceAtMost(300_000)
             nextPollMs = maxOf(backoff, ((failure as? RetryablePanelFailure)?.retrySeconds ?: 0) * 1000)
             if (failure !is RoomHttpFailure) log?.warn("ROOM_POLL_FAILED", failure.javaClass.simpleName)
@@ -260,6 +267,13 @@ class PanelRepository(
                 )
         }
     }
+
+    /**
+     * Whether a returning network should cut the current wait short. Only when the
+     * server was unreachable: a wait the server asked for (an error answer or
+     * Retry-After) is kept, so a recovering server is not hammered by a whole fleet.
+     */
+    fun shouldPollOnNetworkReturn(): Boolean = unreachable
 
     /** The vendor secret for the status light, or null when the panel has none. */
     fun statusLightToken(): String? = lightToken
