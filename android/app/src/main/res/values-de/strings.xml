@@ -14,4 +14,5 @@
     <string name="back">Zurück</string>
     <string name="minutes_left">noch %1$d Min.</string>
     <string name="from">ab</string>
+    <string name="timeline">Zeitachse</string>
 </resources>

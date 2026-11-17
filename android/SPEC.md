@@ -26,8 +26,8 @@ Users:
 2. As a passer-by I see the state (free/busy) as a large coloured area, the time it
    lasts, and the next booking, laid out as the **status-panel** or **day-band**
    layout chosen for the content in Vellum.
-3. As someone at the door I can open a day list and a week view by touch and return
-   to the start screen; after 20 s without touch the app returns by itself.
+3. As someone at the door I can open a large timeline of today and a week view by touch
+   and return to the start screen, which stays the layout chosen in Vellum; after 20 s without touch the app returns by itself.
 4. As someone who wants the room I scan the booking QR code shown on screen.
 5. As an operator I change the design (theme, wordmark, mark) or the layout in the
    console and the panel shows it within one minute, without touching the device.

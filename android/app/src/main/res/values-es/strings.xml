@@ -14,4 +14,5 @@
     <string name="back">Volver</string>
     <string name="minutes_left">quedan %1$d min</string>
     <string name="from">desde</string>
+    <string name="timeline">Cronología</string>
 </resources>

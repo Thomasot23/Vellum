@@ -242,11 +242,22 @@ fun RoomScreen(
                             now,
                             Modifier.fillMaxSize().testTag("day-list"),
                         )
+                    "timeline" -> TimelineView(state, now, Modifier.fillMaxSize())
                     else ->
-                        NativeHome(snapshot, now, assets, Modifier.fillMaxSize()) {
-                            view = "week"
-                            activity++
-                        }
+                        NativeHome(
+                            snapshot,
+                            now,
+                            assets,
+                            Modifier.fillMaxSize(),
+                            onTimeline = {
+                                view = "timeline"
+                                activity++
+                            },
+                            onWeek = {
+                                view = "week"
+                                activity++
+                            },
+                        )
                 }
             }
         }

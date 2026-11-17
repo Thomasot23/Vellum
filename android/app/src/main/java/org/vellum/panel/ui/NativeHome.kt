@@ -56,6 +56,7 @@ internal fun NativeHome(
     now: Instant,
     assets: Map<String, File>,
     modifier: Modifier,
+    onTimeline: () -> Unit = {},
     onWeek: () -> Unit = {},
 ) {
     val state = snapshot.room ?: return
@@ -64,7 +65,7 @@ internal fun NativeHome(
         val wide = maxWidth > maxHeight
         val u = min(maxWidth.value, maxHeight.value) / 480f
         if (state.layout == "day-band") {
-            NativeBand(snapshot, now, assets, moment, u, wide, onWeek)
+            NativeBand(snapshot, now, assets, moment, u, wide, onTimeline, onWeek)
         } else if (wide) {
             Row(Modifier.fillMaxSize()) {
                 StatusGround(snapshot, now, assets, moment, u, Modifier.weight(.4f).fillMaxHeight())
@@ -79,7 +80,7 @@ internal fun NativeHome(
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         Box(Modifier.weight(1f)) { BookingCode(snapshot, now) }
-                        WeekButton(state, u, onWeek)
+                        ViewButtons(state, u, onTimeline, onWeek)
                     }
                 }
             }
@@ -96,7 +97,7 @@ internal fun NativeHome(
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         Box(Modifier.weight(1f)) { BookingCode(snapshot, now) }
-                        WeekButton(state, u, onWeek)
+                        ViewButtons(state, u, onTimeline, onWeek)
                     }
                 }
             }
@@ -402,20 +403,76 @@ private fun TodayAgenda(
     }
 }
 
-/** The way into the week view; the design has no persistent menu. */
+/**
+ * The ways into the timeline and the week. The design has no persistent menu;
+ * which page is home stays Vellum's choice, these views are only a short look.
+ */
 @Composable
-private fun WeekButton(
+private fun ViewButtons(
     state: RoomState,
     u: Float,
+    onTimeline: () -> Unit,
     onWeek: () -> Unit,
 ) {
-    PanelButton(
-        roomResources(state).getString(R.string.week),
-        Palette.blend(state.theme.eventBg, state.theme.background, .2f),
-        state.theme.footerText,
-        u * .6f,
-        Modifier.testTag("nav-week"),
-        onWeek,
+    val resources = roomResources(state)
+    val ground = Palette.blend(state.theme.eventBg, state.theme.background, .2f)
+    Row(horizontalArrangement = Arrangement.spacedBy((8 * u).dp)) {
+        PanelButton(
+            resources.getString(R.string.timeline),
+            ground,
+            state.theme.footerText,
+            u * .6f,
+            Modifier.testTag("nav-timeline"),
+            onTimeline,
+        )
+        PanelButton(
+            resources.getString(R.string.week),
+            ground,
+            state.theme.footerText,
+            u * .6f,
+            Modifier.testTag("nav-week"),
+            onWeek,
+        )
+    }
+}
+
+/** Today as a large, labelled timeline, for a closer look than the home page gives. */
+@Composable
+internal fun TimelineView(
+    state: RoomState,
+    now: Instant,
+    modifier: Modifier,
+) {
+    BoxWithConstraints(modifier.testTag("timeline-view")) {
+        val u = min(maxWidth.value, maxHeight.value) / 480f
+        val bandHeight = maxHeight * .4f
+        Column(Modifier.fillMaxSize()) {
+            DayHeading(state, now, u * 1.4f)
+            Spacer(Modifier.height((24 * u).dp))
+            // A band about half the screen tall: taller blocks only add empty colour.
+            Timeline(state, now, u * 1.6f, Modifier.fillMaxWidth().height(bandHeight), detailed = true)
+            Spacer(Modifier.height((16 * u).dp))
+            // The band shows where the day is busy; full titles need the list below it.
+            TodayAgenda(state, now, u * 1.2f, Modifier.fillMaxWidth().weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun DayHeading(
+    state: RoomState,
+    now: Instant,
+    u: Float,
+) {
+    Label(
+        now
+            .atZone(ZoneId.of(state.timezone))
+            .format(
+                DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.forLanguageTag(state.locale)),
+            ),
+        size(14f, u),
+        ink(state.theme.footerText),
+        bold = true,
     )
 }
 
@@ -427,6 +484,7 @@ private fun NativeBand(
     moment: Moment?,
     u: Float,
     wide: Boolean,
+    onTimeline: () -> Unit,
     onWeek: () -> Unit,
 ) {
     val state = snapshot.room ?: return
@@ -500,7 +558,7 @@ private fun NativeBand(
                 if (it.organizer.isNotBlank()) Label(it.organizer, size(11f, u), ink(state.theme.slotSecondary))
             }
             Spacer(Modifier.height((12 * u).dp))
-            WeekButton(state, u, onWeek)
+            ViewButtons(state, u, onTimeline, onWeek)
         }
         Box(Modifier.align(Alignment.BottomEnd).padding(bottom = (105 * u).dp)) { BookingCode(snapshot, now) }
         Timeline(state, now, u, Modifier.fillMaxWidth().height((85 * u).dp).align(Alignment.BottomCenter))
@@ -513,6 +571,7 @@ private fun Timeline(
     now: Instant,
     u: Float,
     modifier: Modifier,
+    detailed: Boolean = false,
 ) {
     val zone = ZoneId.of(state.timezone)
     val day = now.atZone(zone).toLocalDate()
@@ -550,6 +609,7 @@ private fun Timeline(
             val right = ((minute(Instant.parse(it.event.end)) - from) / span).coerceIn(0f, 1f)
             val phase = Palette.phase(it.event, now)
             val fill = Palette.band(state.theme, phase)
+            val blockWidth = maxWidth * (right - left)
             val tint = ink(fill.ink)
             Box(
                 Modifier
@@ -560,10 +620,20 @@ private fun Timeline(
                     .testTag("band-" + phase.name.lowercase()),
             ) {
                 Column(Modifier.padding((3 * u).dp)) {
-                    if (bandHeight / lanes >= (14 * u).dp) {
-                        Label(time(it.event.start, state), size(8f, u), tint, bold = true, lines = 1)
+                    val height = bandHeight / lanes
+                    // Text never breaks inside a word: a narrow block shows less, not a jumble.
+                    val roomy = detailed && blockWidth >= (70 * u).dp
+                    if (height >= (14 * u).dp) {
+                        val clock = time(it.event.start, state) + if (roomy) "–" + time(it.event.end, state) else ""
+                        Label(clock, size(8f, u), tint, bold = true, lines = 1)
                     }
-                    if (bandHeight / lanes >= (28 * u).dp) Label(it.event.subject, size(8f, u), tint, lines = 1)
+                    if (height >= (28 * u).dp) {
+                        val lines = if (roomy && height >= (56 * u).dp) 2 else 1
+                        Label(it.event.subject, size(8f, u), tint, lines = lines)
+                    }
+                    if (roomy && height >= (48 * u).dp && it.event.organizer.isNotBlank()) {
+                        Label(it.event.organizer, size(7f, u), tint, lines = 1)
+                    }
                 }
                 fill.accentEdge?.let { edge ->
                     Box(
@@ -588,7 +658,8 @@ private fun Timeline(
             drawCircle(marker, radius, centre, style = Stroke(2.dp.toPx()))
         }
         for (hour in 0..24) {
-            if (hour * 60f < from || hour * 60f > to || hour % 2 != 0) continue
+            // The large view can afford a label every hour; the home band every second.
+            if (hour * 60f < from || hour * 60f > to || (hour % 2 != 0 && !(detailed && span <= 10 * 60))) continue
             val fraction = (hour * 60f - from) / span
             val labelWidth = (36 * u).dp
             val x = (maxWidth * fraction - labelWidth / 2).coerceIn(0.dp, (maxWidth - labelWidth).coerceAtLeast(0.dp))

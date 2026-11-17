@@ -14,4 +14,5 @@
     <string name="back">Retour</string>
     <string name="minutes_left">encore %1$d min</string>
     <string name="from">à partir de</string>
+    <string name="timeline">Chronologie</string>
 </resources>

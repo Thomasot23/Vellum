@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -113,6 +114,34 @@ class RoomScreenTest {
         compose.onNodeWithTag("nav-back").performClick()
         compose.onNodeWithTag("status").assertIsDisplayed()
         compose.onNodeWithTag("nav-back").assertDoesNotExist()
+    }
+
+    @Test fun timelineIsAShortLookAndHomeStaysTheServersChoice() {
+        val event = fixture.events.first()
+        var room by mutableStateOf(
+            fixture.copy(
+                layout = "status-panel",
+                events =
+                    listOf(
+                        event.copy(start = "2026-11-12T11:00:00Z", end = "2026-11-12T12:00:00Z", subject = "Review"),
+                    ),
+            ),
+        )
+        compose.setContent { RoomScreen(Snapshot(Stage.ACTIVE, room, now), now) }
+        for (layout in listOf("status-panel", "day-band")) {
+            compose.runOnIdle { room = room.copy(layout = layout) }
+            compose.onNodeWithTag("nav-timeline").performClick()
+            compose.onNodeWithTag("timeline-view").assertIsDisplayed()
+            compose.onNodeWithText("11:00 – 12:00").assertIsDisplayed()
+            compose.onAllNodesWithText("Review")[0].assertIsDisplayed()
+            compose.onNodeWithTag("nav-back").performClick()
+            compose.onNodeWithTag("status").assertIsDisplayed()
+            compose.onNodeWithTag("nav-timeline").performClick()
+            compose.mainClock.advanceTimeBy(21_000)
+            compose.waitForIdle()
+            compose.onNodeWithTag("timeline-view").assertDoesNotExist()
+            compose.onNodeWithTag("status").assertIsDisplayed()
+        }
     }
 
     @Test fun bookingsAreColouredByPhaseInBothLayouts() {

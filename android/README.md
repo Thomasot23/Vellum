@@ -64,7 +64,10 @@ continues locally; the server's configured room timezone controls all date and
 time presentation. The JSON endpoint supplies seven local calendar days starting
 today, including overnight events and daylight-saving transitions; e-paper
 rendering retains its original window. The native endpoint caps provider caching
-at fifteen seconds. Day/week navigation returns home after 20 seconds without touch.
+at fifteen seconds. The home page is always the layout chosen in Vellum. Large "Timeline" and
+"Week" buttons open a short look at today's timeline (a large band with today's
+bookings listed below it) or the week; "Back" or 20 seconds without touch return
+home.
 Week counts refer to **visible** bookings, respecting the room privacy policy.
 
 The app uses the bundled Inter font under its SIL Open Font License, includes
